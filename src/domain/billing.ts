@@ -20,6 +20,9 @@ import type {
   BlockKey,
   CalculatorInput,
   DacRisk,
+  DailyAllowanceComparison,
+  DailyAllowanceProfile,
+  DailyBandThreshold,
   DomesticTariffCode,
   MonthNumber,
   RateBlock,
@@ -424,4 +427,183 @@ export function allocateDomesticBlocks(
       label: item.block.label,
       kwh: roundKwh(item.kwh),
     }))
+}
+
+function formatDailyKwh(value: number): string {
+  return new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }).format(value)
+}
+
+function seasonProfileLabel(season: Season, code: Exclude<DomesticTariffCode, 'DAC'>): string {
+  if (code === '1') return 'Sin temporada diferenciada'
+  return season === 'verano' ? 'Temporada de verano' : 'Fuera de verano'
+}
+
+/**
+ * Convert monthly finite blocks into average daily thresholds for a comparison window.
+ * periodDays is the number of days those (scaled) allowances cover.
+ */
+export function buildDailyAllowanceProfile(
+  code: Exclude<DomesticTariffCode, 'DAC'>,
+  season: Season,
+  monthFactor: number,
+  periodDays: number,
+  rateMonth: MonthNumber,
+  rateYear: number,
+): DailyAllowanceProfile {
+  const tariff = getDomesticTariff(code)
+  const scaled = scaleBlocks(tariff.blocksBySeason[season], monthFactor)
+  const finite = scaled.filter((block) => Number.isFinite(block.allowanceKwh))
+  const days = Math.max(1, periodDays)
+
+  let cumulative = 0
+  const bands: DailyBandThreshold[] = finite.map((block) => {
+    const bandDailyKwh = roundKwh(block.allowanceKwh / days)
+    cumulative = roundKwh(cumulative + bandDailyKwh)
+    return {
+      key: block.key as DailyBandThreshold['key'],
+      label: block.label,
+      bandDailyKwh,
+      cumulativeDailyKwh: cumulative,
+      ratePerKwh: getPrice(code, rateMonth, season, block.key, rateYear),
+    }
+  })
+
+  return {
+    season,
+    seasonLabel: seasonProfileLabel(season, code),
+    bands,
+    subsidizedCeilingDailyKwh: bands[bands.length - 1]?.cumulativeDailyKwh ?? 0,
+    excedenteRatePerKwh: getPrice(code, rateMonth, season, 'excedente', rateYear),
+  }
+}
+
+function guidanceForProfile(averageDailyKwh: number, profile: DailyAllowanceProfile): string {
+  const avg = formatDailyKwh(averageDailyKwh)
+  if (profile.bands.length === 0) {
+    return `Tu promedio es de ${avg} kWh/día.`
+  }
+
+  const first = profile.bands[0]!
+  if (averageDailyKwh <= first.cumulativeDailyKwh) {
+    const headroom = roundKwh(first.cumulativeDailyKwh - averageDailyKwh)
+    return `Tu promedio (${avg} kWh/día) cabe en ${first.label}. Te quedan ${formatDailyKwh(headroom)} kWh/día antes de pasar al siguiente bloque.`
+  }
+
+  for (let i = 1; i < profile.bands.length; i += 1) {
+    const band = profile.bands[i]!
+    const previous = profile.bands[i - 1]!
+    if (averageDailyKwh <= band.cumulativeDailyKwh) {
+      const abovePrevious = roundKwh(averageDailyKwh - previous.cumulativeDailyKwh)
+      const headroom = roundKwh(band.cumulativeDailyKwh - averageDailyKwh)
+      return `Tu promedio (${avg} kWh/día) supera ${previous.label} por ${formatDailyKwh(abovePrevious)} kWh/día y aún cabe en ${band.label}. Te quedan ${formatDailyKwh(headroom)} kWh/día antes del excedente.`
+    }
+  }
+
+  const ceiling = profile.subsidizedCeilingDailyKwh
+  const last = profile.bands[profile.bands.length - 1]!
+  const excess = roundKwh(averageDailyKwh - ceiling)
+  return `Tu promedio (${avg} kWh/día) supera ${last.label} por ${formatDailyKwh(excess)} kWh/día: esa parte se cobra como Excedente (precio alto).`
+}
+
+function mixtoRateRefs(input: CalculatorInput): {
+  fuera: { month: MonthNumber; year: number }
+  verano: { month: MonthNumber; year: number }
+} {
+  const summerDays = countSummerDaysInPeriod(
+    input.previousCutoffDate,
+    input.nextCutoffDate,
+    input.summerStartMonth,
+  )
+  const firstOffset = summerDays > 30 && summerDays <= 45 ? 60 : 30
+  const secondOffset = summerDays > 30 && summerDays <= 45 ? 30 : 0
+  const firstRef = rateLookupMonth(input.nextCutoffDate, firstOffset)
+  const secondRef =
+    secondOffset === 0
+      ? { year: yearNumber(input.nextCutoffDate), month: monthNumber(input.nextCutoffDate) }
+      : rateLookupMonth(input.nextCutoffDate, secondOffset)
+
+  const startsInSummer = isSummerMonth(
+    monthNumber(input.previousCutoffDate),
+    input.summerStartMonth,
+  )
+  const firstSeason: Season = startsInSummer ? 'verano' : 'fuera'
+  return firstSeason === 'verano'
+    ? { verano: firstRef, fuera: secondRef }
+    : { fuera: firstRef, verano: secondRef }
+}
+
+/**
+ * Average daily cheap-band allowances for the user's tariff and season resolution,
+ * compared against observed averageDailyKwh.
+ */
+export function buildDailyAllowanceComparison(
+  input: CalculatorInput,
+  averageDailyKwh: number,
+  billingDays: number,
+  seasonMode: BillEstimate['seasonMode'],
+  rateMonth: MonthNumber,
+  rateYear: number,
+): DailyAllowanceComparison {
+  if (input.tariffCode === 'DAC') {
+    return {
+      applicable: false,
+      mode: 'dac',
+      averageDailyKwh: roundKwh(averageDailyKwh),
+      billingDays,
+      profiles: [],
+      guidance:
+        'La tarifa DAC no tiene bloques subsidiados (Básico/Intermedio): toda la energía se cobra a la cuota DAC más el cargo fijo.',
+    }
+  }
+
+  const code = input.tariffCode
+  const days = Math.max(1, billingDays)
+
+  if (seasonMode === 'mixto') {
+    // Mixto bills two monthly halves independently; each profile uses one month of blocks
+    // over half the billing period (≈ 30 days when the ciclo is 60).
+    const halfDays = Math.max(1, days / 2)
+    const refs = mixtoRateRefs(input)
+    const fuera = buildDailyAllowanceProfile(
+      code,
+      'fuera',
+      1,
+      halfDays,
+      refs.fuera.month,
+      refs.fuera.year,
+    )
+    const verano = buildDailyAllowanceProfile(
+      code,
+      'verano',
+      1,
+      halfDays,
+      refs.verano.month,
+      refs.verano.year,
+    )
+    return {
+      applicable: true,
+      mode: 'mixto',
+      averageDailyKwh: roundKwh(averageDailyKwh),
+      billingDays: days,
+      profiles: [fuera, verano],
+      guidance: [
+        `Periodo mixto: el consumo se reparte en dos fracciones mensuales. Compara tu promedio (${formatDailyKwh(averageDailyKwh)} kWh/día) con cada temporada.`,
+        `Fuera de verano: ${guidanceForProfile(averageDailyKwh, fuera)}`,
+        `Verano: ${guidanceForProfile(averageDailyKwh, verano)}`,
+      ].join(' '),
+    }
+  }
+
+  const season: Season = seasonMode === 'verano' ? 'verano' : 'fuera'
+  const monthFactor = input.billingCycle === 'mensual' ? 1 : 2
+  const profile = buildDailyAllowanceProfile(code, season, monthFactor, days, rateMonth, rateYear)
+
+  return {
+    applicable: true,
+    mode: seasonMode,
+    averageDailyKwh: roundKwh(averageDailyKwh),
+    billingDays: days,
+    profiles: [profile],
+    guidance: guidanceForProfile(averageDailyKwh, profile),
+  }
 }

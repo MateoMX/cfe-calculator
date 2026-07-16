@@ -124,6 +124,37 @@ export interface DacRisk {
   message: string
 }
 
+/** Finite subsidized band expressed as an average daily allowance. */
+export interface DailyBandThreshold {
+  key: Exclude<BlockKey, 'excedente' | 'energia' | 'cargoFijo'>
+  label: string
+  /** This band's own average daily allowance (kWh/día). */
+  bandDailyKwh: number
+  /** Cumulative ceiling through this band (kWh/día). */
+  cumulativeDailyKwh: number
+  /** Official energy price for this band ($/kWh). */
+  ratePerKwh: number
+}
+
+export interface DailyAllowanceProfile {
+  season: Season
+  seasonLabel: string
+  bands: DailyBandThreshold[]
+  /** Highest cumulative ceiling among finite (cheap) bands. */
+  subsidizedCeilingDailyKwh: number
+  /** Official Excedente price for this season/month ($/kWh). */
+  excedenteRatePerKwh: number
+}
+
+export interface DailyAllowanceComparison {
+  applicable: boolean
+  mode: 'verano' | 'fuera' | 'mixto' | 'dac'
+  averageDailyKwh: number
+  billingDays: number
+  profiles: DailyAllowanceProfile[]
+  guidance: string
+}
+
 export interface FullEstimate {
   input: CalculatorInput
   projection: ProjectionResult
@@ -132,4 +163,5 @@ export interface FullEstimate {
   dacRisk: DacRisk
   regionalNotes: string[]
   dataAsOf: string
+  dailyAllowance: DailyAllowanceComparison
 }

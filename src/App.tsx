@@ -3,15 +3,22 @@ import { CalculatorForm } from './components/CalculatorForm'
 import { EstimateResult } from './components/EstimateResult'
 import { getState } from './data/locations'
 import { TARIFF_OPTIONS, TARIFF_SNAPSHOT_META } from './data/tariffs-2026'
-import { defaultNextCutoff, isPreviousCutoffFresh } from './domain/dates'
+import { defaultNextCutoff, isPreviousCutoffFresh, SUMMER_START_OPTIONS } from './domain/dates'
 import { createEmptyInput, estimateBill } from './domain/estimate'
-import type { CalculatorInput, FullEstimate, ValidationIssue } from './domain/types'
+import type { CalculatorInput, FullEstimate, SummerStartMonth, ValidationIssue } from './domain/types'
 import './App.css'
 
 const PREFERENCES_STORAGE_KEY = 'cfe-calculator.preferences.v1'
 
 function isTariffCode(value: unknown): value is CalculatorInput['tariffCode'] {
   return typeof value === 'string' && TARIFF_OPTIONS.some((option) => option.code === value)
+}
+
+function isSummerStartMonth(value: unknown): value is SummerStartMonth {
+  return (
+    typeof value === 'number' &&
+    SUMMER_START_OPTIONS.some((option) => option.value === value)
+  )
 }
 
 function createInputWithSavedPreferences(): CalculatorInput {
@@ -36,6 +43,12 @@ function createInputWithSavedPreferences(): CalculatorInput {
       preferences.billingCycle === 'mensual' || preferences.billingCycle === 'bimestral'
         ? preferences.billingCycle
         : input.billingCycle
+    const summerStartMonth =
+      tariffCode === '1'
+        ? null
+        : isSummerStartMonth(preferences.summerStartMonth)
+          ? preferences.summerStartMonth
+          : input.summerStartMonth
 
     const previousCutoffDate =
       typeof preferences.previousCutoffDate === 'string' &&
@@ -55,7 +68,7 @@ function createInputWithSavedPreferences(): CalculatorInput {
       stateCode: state?.code ?? '',
       municipality,
       tariffCode,
-      summerStartMonth: tariffCode === '1' ? null : input.summerStartMonth,
+      summerStartMonth,
       billingCycle,
       previousReading,
       previousCutoffDate,
@@ -83,6 +96,7 @@ export default function App() {
           stateCode: input.stateCode,
           municipality: input.municipality,
           tariffCode: input.tariffCode,
+          summerStartMonth: input.summerStartMonth,
           billingCycle: input.billingCycle,
           previousReading: input.previousReading,
           previousCutoffDate: input.previousCutoffDate,
@@ -95,6 +109,7 @@ export default function App() {
     input.stateCode,
     input.municipality,
     input.tariffCode,
+    input.summerStartMonth,
     input.billingCycle,
     input.previousReading,
     input.previousCutoffDate,

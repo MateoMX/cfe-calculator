@@ -63,15 +63,32 @@ describe('App', () => {
     expect(screen.getByText(/promedio de 12\.5 kWh por día/i)).toBeInTheDocument()
     expect(screen.getByText(/Total estimado/i)).toBeInTheDocument()
     expect(screen.getByText(/Consumo proyectado/i).parentElement).toHaveTextContent(/750/)
+
+    expect(screen.getByRole('heading', { name: /Cupo diario en bloques baratos/i })).toBeInTheDocument()
+    expect(screen.getByText('Tu promedio diario').parentElement).toHaveTextContent(
+      /Tu promedio diario12\.5 kWh\/día/i,
+    )
+    expect(
+      screen.getByText(/supera Intermedio por 5 kWh\/día: esa parte se cobra como Excedente/i),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/techo acumulado 7\.5/i)).toBeInTheDocument()
+    expect(screen.getByText(/5 kWh\/día en Excedente/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/\$1\.010\/kWh/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/\$1\.171\/kWh/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/\$4\.016\/kWh/i).length).toBeGreaterThan(0)
   })
 
-  it('restores the saved location, tariff, and billing cycle', async () => {
+  it('restores the saved location, tariff, summer start, and billing cycle', async () => {
     const user = userEvent.setup()
     const firstRender = render(<App />)
 
     await user.selectOptions(screen.getByLabelText(/^Estado$/i), 'YUC')
     await user.selectOptions(screen.getByLabelText(/^Municipio$/i), 'Mérida')
     await user.selectOptions(screen.getByLabelText(/Tarifa impresa en tu recibo/i), '1C')
+    await user.selectOptions(
+      screen.getByLabelText(/Mes en que comienza el verano en tu localidad/i),
+      '3',
+    )
     await user.selectOptions(screen.getByLabelText(/Ciclo de facturación/i), 'mensual')
 
     firstRender.unmount()
@@ -80,6 +97,7 @@ describe('App', () => {
     expect(screen.getByLabelText(/^Estado$/i)).toHaveValue('YUC')
     expect(screen.getByLabelText(/^Municipio$/i)).toHaveValue('Mérida')
     expect(screen.getByLabelText(/Tarifa impresa en tu recibo/i)).toHaveValue('1C')
+    expect(screen.getByLabelText(/Mes en que comienza el verano en tu localidad/i)).toHaveValue('3')
     expect(screen.getByLabelText(/Ciclo de facturación/i)).toHaveValue('mensual')
   })
 

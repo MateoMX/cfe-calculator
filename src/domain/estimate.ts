@@ -1,6 +1,6 @@
 import { regionalNotesFor } from '../data/locations'
 import { TARIFF_SNAPSHOT_META } from '../data/tariffs-2026'
-import { assessDacRisk, estimateDomesticBill } from './billing'
+import { assessDacRisk, buildDailyAllowanceComparison, estimateDomesticBill } from './billing'
 import { formatDisplayDate, isSummerMonth, monthNumber, todayISO } from './dates'
 import { projectConsumption, validateCalculatorInput } from './projection'
 import type { CalculatorInput, FullEstimate, ValidationIssue } from './types'
@@ -65,6 +65,14 @@ export function estimateBill(input: CalculatorInput): {
   const bill = estimateDomesticBill(input, projection.projectedKwh)
   const dacRisk = assessDacRisk(input)
   const regionalNotes = regionalNotesFor(input.stateCode, input.municipality)
+  const dailyAllowance = buildDailyAllowanceComparison(
+    input,
+    projection.observed.averageDailyKwh,
+    projection.billingDays,
+    bill.seasonMode,
+    bill.rateMonth,
+    bill.rateYear,
+  )
 
   const estimate: FullEstimate = {
     input,
@@ -74,6 +82,7 @@ export function estimateBill(input: CalculatorInput): {
     dacRisk,
     regionalNotes,
     dataAsOf: TARIFF_SNAPSHOT_META.asOf,
+    dailyAllowance,
   }
   estimate.narrative = buildNarrative(input, estimate)
   return { issues: [], estimate }

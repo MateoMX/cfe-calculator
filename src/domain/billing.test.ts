@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { allocateDomesticBlocks, estimateDomesticBill, resolveSeasonMode } from './billing'
+import {
+  allocateDomesticBlocks,
+  buildDailyAllowanceComparison,
+  buildDailyAllowanceProfile,
+  estimateDomesticBill,
+  resolveSeasonMode,
+} from './billing'
 import { createEmptyInput, estimateBill } from './estimate'
 
 describe('domestic block allocation', () => {
@@ -129,5 +135,110 @@ describe('bill estimate', () => {
     const bill = estimateDomesticBill(input, 20)
     expect(bill.minimumApplied).toBe(true)
     expect(bill.billedKwh).toBe(50)
+  })
+})
+
+describe('daily allowance comparison', () => {
+  it('converts 1B summer bimestral blocks into daily cumulative thresholds', () => {
+    // 125 + 100 monthly → ×2 for bimestre → /60 days = 4.167 + 3.333 = 7.5
+    const profile = buildDailyAllowanceProfile('1B', 'verano', 2, 60, 7, 2026)
+    expect(profile.bands.map((band) => [band.key, band.bandDailyKwh, band.cumulativeDailyKwh])).toEqual([
+      ['basico', 4.167, 4.167],
+      ['intermedio', 3.333, 7.5],
+    ])
+    expect(profile.subsidizedCeilingDailyKwh).toBe(7.5)
+    expect(profile.bands[0]!.ratePerKwh).toBe(1.01)
+    expect(profile.bands[1]!.ratePerKwh).toBe(1.171)
+    expect(profile.excedenteRatePerKwh).toBe(4.016)
+  })
+
+  it('uses smaller 1B non-summer daily ceilings', () => {
+    const profile = buildDailyAllowanceProfile('1B', 'fuera', 2, 60, 7, 2026)
+    expect(profile.bands.map((band) => [band.key, band.cumulativeDailyKwh])).toEqual([
+      ['basico', 2.5],
+      ['intermedio', 5.833],
+    ])
+  })
+
+  it('keeps separate summer and non-summer profiles for mixto periods', () => {
+    const input = {
+      ...createEmptyInput(),
+      tariffCode: '1B' as const,
+      summerStartMonth: 5 as const,
+      billingCycle: 'bimestral' as const,
+      previousCutoffDate: '2026-04-15',
+      nextCutoffDate: '2026-06-14',
+    }
+    const comparison = buildDailyAllowanceComparison(input, 12.5, 60, 'mixto', 5, 2026)
+    expect(comparison.applicable).toBe(true)
+    expect(comparison.mode).toBe('mixto')
+    expect(comparison.profiles).toHaveLength(2)
+    expect(comparison.profiles.map((profile) => profile.season)).toEqual(['fuera', 'verano'])
+    // Each half uses monthly blocks over 30 days.
+    expect(comparison.profiles[0]!.subsidizedCeilingDailyKwh).toBeCloseTo(175 / 30, 3)
+    expect(comparison.profiles[1]!.subsidizedCeilingDailyKwh).toBeCloseTo(225 / 30, 3)
+    expect(comparison.guidance).toMatch(/Periodo mixto/i)
+    expect(comparison.profiles[0]!.excedenteRatePerKwh).toBeGreaterThan(0)
+    expect(comparison.profiles[1]!.excedenteRatePerKwh).toBeGreaterThan(0)
+  })
+
+  it('includes intermediate low/high bands for 1C summer', () => {
+    const profile = buildDailyAllowanceProfile('1C', 'verano', 1, 30, 7, 2026)
+    expect(profile.bands.map((band) => band.key)).toEqual([
+      'basico',
+      'intermedioBajo',
+      'intermedioAlto',
+    ])
+    expect(profile.subsidizedCeilingDailyKwh).toBe(15) // 450 / 30
+    expect(profile.bands.map((band) => band.ratePerKwh)).toEqual([1.01, 1.171, 1.505])
+  })
+
+  it('explains when the daily average sits in Excedente', () => {
+    const input = {
+      ...createEmptyInput(),
+      tariffCode: '1B' as const,
+      summerStartMonth: 5 as const,
+      billingCycle: 'bimestral' as const,
+    }
+    const comparison = buildDailyAllowanceComparison(input, 12.5, 60, 'verano', 7, 2026)
+    expect(comparison.guidance).toMatch(/Excedente/i)
+    expect(comparison.guidance).toMatch(/12\.5/)
+    expect(comparison.profiles[0]!.excedenteRatePerKwh).toBe(4.016)
+  })
+
+  it('returns a non-applicable DAC explanation without inventing blocks', () => {
+    const input = {
+      ...createEmptyInput(),
+      tariffCode: 'DAC' as const,
+      summerStartMonth: 5 as const,
+    }
+    const comparison = buildDailyAllowanceComparison(input, 20, 60, 'verano', 7, 2026)
+    expect(comparison.applicable).toBe(false)
+    expect(comparison.mode).toBe('dac')
+    expect(comparison.profiles).toHaveLength(0)
+    expect(comparison.guidance).toMatch(/no tiene bloques subsidiados/i)
+  })
+
+  it('attaches dailyAllowance to the full estimate', () => {
+    const input = {
+      ...createEmptyInput(),
+      stateCode: 'YUC',
+      municipality: 'Mérida',
+      tariffCode: '1B' as const,
+      summerStartMonth: 5 as const,
+      billingCycle: 'bimestral' as const,
+      previousReading: 1000,
+      currentReading: 1200,
+      previousCutoffDate: '2026-06-30',
+      currentReadingDate: '2026-07-16',
+      nextCutoffDate: '2026-08-29',
+    }
+    const { estimate, issues } = estimateBill(input)
+    expect(issues).toHaveLength(0)
+    expect(estimate!.dailyAllowance.applicable).toBe(true)
+    expect(estimate!.dailyAllowance.averageDailyKwh).toBe(12.5)
+    expect(estimate!.dailyAllowance.profiles[0]!.subsidizedCeilingDailyKwh).toBe(7.5)
+    expect(estimate!.dailyAllowance.profiles[0]!.bands[0]!.ratePerKwh).toBe(1.01)
+    expect(estimate!.dailyAllowance.profiles[0]!.excedenteRatePerKwh).toBe(4.016)
   })
 })

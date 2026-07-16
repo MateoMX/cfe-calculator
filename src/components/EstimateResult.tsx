@@ -1,6 +1,7 @@
 import { forwardRef } from 'react'
 import { TARIFF_SNAPSHOT_META } from '../data/tariffs-2026'
 import type { FullEstimate } from '../domain/types'
+import { DailyAllowanceChart } from './DailyAllowanceChart'
 
 interface Props {
   estimate: FullEstimate
@@ -56,6 +57,8 @@ export const EstimateResult = forwardRef<HTMLElement, Props>(function EstimateRe
           <strong>{kwh(bill.billedKwh)} kWh</strong>
         </div>
       </div>
+
+      <DailyAllowanceChart comparison={estimate.dailyAllowance} />
 
       <h3>{bill.seasonLabel}</h3>
       <div className="table-wrap">
