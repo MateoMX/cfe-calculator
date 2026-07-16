@@ -119,6 +119,26 @@ export function defaultNextCutoff(
   return addDays(previousCutoffISO, cycle === 'mensual' ? 30 : 60)
 }
 
+/**
+ * Whether a remembered previous corte is still useful for pre-filling the form.
+ * Fresh if age is within the billing cycle length plus a 5-day grace window
+ * (mensual ≤ 35 days, bimestral ≤ 65 days).
+ */
+export function isPreviousCutoffFresh(
+  previousCutoffISO: string,
+  cycle: 'mensual' | 'bimestral',
+  now = new Date(),
+): boolean {
+  if (!previousCutoffISO) return false
+  try {
+    const ageDays = calendarDaysBetween(previousCutoffISO, todayISO(now))
+    const maxAgeDays = (cycle === 'mensual' ? 30 : 60) + 5
+    return ageDays >= 0 && ageDays <= maxAgeDays
+  } catch {
+    return false
+  }
+}
+
 export const SUMMER_START_OPTIONS: Array<{ value: SummerStartMonth; label: string }> = [
   { value: 2, label: 'Febrero' },
   { value: 3, label: 'Marzo' },

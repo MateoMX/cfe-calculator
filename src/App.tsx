@@ -3,6 +3,7 @@ import { CalculatorForm } from './components/CalculatorForm'
 import { EstimateResult } from './components/EstimateResult'
 import { getState } from './data/locations'
 import { TARIFF_OPTIONS, TARIFF_SNAPSHOT_META } from './data/tariffs-2026'
+import { defaultNextCutoff, isPreviousCutoffFresh } from './domain/dates'
 import { createEmptyInput, estimateBill } from './domain/estimate'
 import type { CalculatorInput, FullEstimate, ValidationIssue } from './domain/types'
 import './App.css'
@@ -36,6 +37,19 @@ function createInputWithSavedPreferences(): CalculatorInput {
         ? preferences.billingCycle
         : input.billingCycle
 
+    const previousCutoffDate =
+      typeof preferences.previousCutoffDate === 'string' &&
+      isPreviousCutoffFresh(preferences.previousCutoffDate, billingCycle)
+        ? preferences.previousCutoffDate
+        : ''
+    const previousReading =
+      previousCutoffDate &&
+      typeof preferences.previousReading === 'number' &&
+      Number.isFinite(preferences.previousReading) &&
+      preferences.previousReading >= 0
+        ? preferences.previousReading
+        : input.previousReading
+
     return {
       ...input,
       stateCode: state?.code ?? '',
@@ -43,6 +57,11 @@ function createInputWithSavedPreferences(): CalculatorInput {
       tariffCode,
       summerStartMonth: tariffCode === '1' ? null : input.summerStartMonth,
       billingCycle,
+      previousReading,
+      previousCutoffDate,
+      nextCutoffDate: previousCutoffDate
+        ? defaultNextCutoff(previousCutoffDate, billingCycle)
+        : input.nextCutoffDate,
     }
   } catch {
     return input
@@ -65,12 +84,21 @@ export default function App() {
           municipality: input.municipality,
           tariffCode: input.tariffCode,
           billingCycle: input.billingCycle,
+          previousReading: input.previousReading,
+          previousCutoffDate: input.previousCutoffDate,
         }),
       )
     } catch {
       // The calculator remains usable when browser storage is unavailable.
     }
-  }, [input.stateCode, input.municipality, input.tariffCode, input.billingCycle])
+  }, [
+    input.stateCode,
+    input.municipality,
+    input.tariffCode,
+    input.billingCycle,
+    input.previousReading,
+    input.previousCutoffDate,
+  ])
 
   useEffect(() => {
     if (!shouldScrollToResult.current || !estimate) return

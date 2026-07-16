@@ -1,12 +1,16 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { daysAgoLabel, todayISO } from './domain/dates'
 
 describe('App', () => {
   beforeEach(() => {
     window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('renders the Spanish calculator and produces an estimate', async () => {
@@ -77,5 +81,49 @@ describe('App', () => {
     expect(screen.getByLabelText(/^Municipio$/i)).toHaveValue('Mérida')
     expect(screen.getByLabelText(/Tarifa impresa en tu recibo/i)).toHaveValue('1C')
     expect(screen.getByLabelText(/Ciclo de facturación/i)).toHaveValue('mensual')
+  })
+
+  it('restores previous reading and corte when still within the bimestral window', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 7, 25))
+    window.localStorage.setItem(
+      'cfe-calculator.preferences.v1',
+      JSON.stringify({
+        billingCycle: 'bimestral',
+        previousReading: 1000,
+        previousCutoffDate: '2026-06-30',
+      }),
+    )
+
+    render(<App />)
+
+    expect(screen.getByLabelText(/Lectura anterior \(kWh del medidor al corte previo\)/i)).toHaveValue(
+      1000,
+    )
+    expect(screen.getByLabelText(/Fecha de corte del recibo anterior/i)).toHaveValue('2026-06-30')
+    expect(
+      screen.getByText(/Estimamos el próximo corte para el 29 de agosto de 2026/i),
+    ).toBeInTheDocument()
+  })
+
+  it('does not restore previous reading and corte when past the mensual window', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 7, 25))
+    window.localStorage.setItem(
+      'cfe-calculator.preferences.v1',
+      JSON.stringify({
+        billingCycle: 'mensual',
+        previousReading: 1000,
+        previousCutoffDate: '2026-06-30',
+      }),
+    )
+
+    render(<App />)
+
+    expect(screen.getByLabelText(/Ciclo de facturación/i)).toHaveValue('mensual')
+    expect(
+      screen.getByLabelText(/Lectura anterior \(kWh del medidor al corte previo\)/i),
+    ).not.toHaveValue(1000)
+    expect(screen.getByLabelText(/Fecha de corte del recibo anterior/i)).toHaveValue('')
   })
 })
