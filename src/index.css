@@ -1,0 +1,49 @@
+:root {
+  color-scheme: light;
+  --text: #14213d;
+  --muted: #5c6b7a;
+  --accent: #0b6bcb;
+  --surface: #ffffff;
+  --soft: #f3f7fb;
+  --border: #d7e0ea;
+  --shadow: 0 10px 30px rgba(20, 33, 61, 0.06);
+  font-family:
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    Roboto,
+    Ubuntu,
+    Cantarell,
+    'Noto Sans',
+    sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, #e8f2ff, transparent 28%),
+    linear-gradient(180deg, #f7fafc 0%, #eef3f8 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
