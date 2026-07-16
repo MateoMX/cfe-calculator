@@ -8,6 +8,7 @@ import {
 import {
   addDays,
   countSummerDaysInPeriod,
+  formatDisplayDate,
   isSummerMonth,
   MONTH_LABELS,
   monthNumber,
@@ -279,7 +280,7 @@ export function estimateDomesticBill(
   const total = roundMoney(ivaBase + iva)
 
   assumptions.push(
-    `Estimación con fotografía tarifaria vigente al ${TARIFF_SNAPSHOT_META.asOf}. El recibo oficial de CFE prevalece.`,
+    `Última actualización de tarifas: ${formatDisplayDate(TARIFF_SNAPSHOT_META.asOf)}. Las tarifas son correctas a esta fecha. El recibo oficial de CFE prevalece.`,
   )
   assumptions.push(
     `Límite DAC de referencia para ${tariff.name}: ${tariff.dacLimitKwhMonth} kWh/mes (promedio móvil de 12 meses).`,
@@ -366,7 +367,7 @@ function estimateDacBill(input: CalculatorInput, projectedKwh: number): BillEsti
     total,
     assumptions: [
       'DAC usa cargo fijo más energía sin bloques subsidiados.',
-      `Fotografía DAC regional vigente al ${TARIFF_SNAPSHOT_META.asOf}; confirma el oficio mensual de tu recibo.`,
+      `Tarifas DAC regionales actualizadas y correctas al ${formatDisplayDate(TARIFF_SNAPSHOT_META.asOf)}; confirma el oficio mensual de tu recibo.`,
     ],
     warnings: [
       'La reclasificación a DAC depende del promedio móvil de 12 meses, no de un solo periodo.',

@@ -1,9 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CalculatorForm } from './components/CalculatorForm'
 import { EstimateResult } from './components/EstimateResult'
 import { getState } from './data/locations'
 import { TARIFF_OPTIONS, TARIFF_SNAPSHOT_META } from './data/tariffs-2026'
-import { defaultNextCutoff, isPreviousCutoffFresh, SUMMER_START_OPTIONS } from './domain/dates'
+import {
+  defaultNextCutoff,
+  formatDisplayDate,
+  isPreviousCutoffFresh,
+  SUMMER_START_OPTIONS,
+} from './domain/dates'
 import { createEmptyInput, estimateBill } from './domain/estimate'
 import type { CalculatorInput, FullEstimate, SummerStartMonth, ValidationIssue } from './domain/types'
 import './App.css'
@@ -121,12 +126,6 @@ export default function App() {
     resultRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
   }, [estimate])
 
-  const exampleHint = useMemo(
-    () =>
-      'Ejemplo: lectura 1000 el 30 de junio y 1200 el 16 de julio ⇒ 200 kWh en 16 días (12.5 kWh/día).',
-    [],
-  )
-
   function handleSubmit() {
     const result = estimateBill(input)
     setIssues(result.issues)
@@ -139,15 +138,11 @@ export default function App() {
   return (
     <div className="page">
       <header className="hero">
-        <p className="eyebrow">Herramienta estática · GitHub Pages</p>
         <h1>Calculadora de recibo CFE</h1>
         <p>
           Estima tu próximo recibo doméstico a partir de lecturas del medidor, tu tarifa, el punto del
           ciclo de facturación y la temporada de verano. Todo corre en tu navegador; no se envían datos
           a ningún servidor.
-        </p>
-        <p className="meta">
-          Fotografía tarifaria vigente al <strong>{TARIFF_SNAPSHOT_META.asOf}</strong>. {exampleHint}
         </p>
       </header>
 
@@ -175,6 +170,10 @@ export default function App() {
               <li>Ciclos mensual y bimestral</li>
               <li>Reglas de verano y periodos mixtos</li>
             </ul>
+            <p className="meta">
+              Última actualización: <strong>{formatDisplayDate(TARIFF_SNAPSHOT_META.asOf)}</strong>.
+              Las tarifas son correctas a esta fecha.
+            </p>
           </aside>
         )}
       </main>

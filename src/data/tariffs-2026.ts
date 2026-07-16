@@ -15,7 +15,7 @@ export const TARIFF_SNAPSHOT_META: TariffSnapshotMeta = {
   agreementsUrl:
     'https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Acuerdos/AcuerdosCasa.aspx',
   notes: [
-    'Fotografía estática vigente al 16 de julio de 2026.',
+    'Última actualización: 16 de julio de 2026. Las tarifas son correctas a esta fecha.',
     'Los bloques mensuales provienen del esquema oficial de tarifas domésticas 1–1F.',
     'Las cuotas 1B de julio 2026 (verano) se verificaron en el portal CFE: básico 1.010, intermedio 1.171, excedente 4.016.',
     'DAC julio 2026: Oficio SHCP 349-B-1-069 (cargo fijo 144.95 y cuotas regionales verificadas).',

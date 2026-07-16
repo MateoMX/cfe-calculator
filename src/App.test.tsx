@@ -71,7 +71,7 @@ describe('App', () => {
     expect(
       screen.getByText(/supera Intermedio por 5 kWh\/día: esa parte se cobra como Excedente/i),
     ).toBeInTheDocument()
-    expect(screen.getByText(/techo acumulado 7\.5/i)).toBeInTheDocument()
+    expect(screen.getByText(/max cantidad 7\.5/i)).toBeInTheDocument()
     expect(screen.getByText(/5 kWh\/día en Excedente/i)).toBeInTheDocument()
     expect(screen.getAllByText(/\$1\.010\/kWh/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/\$1\.171\/kWh/i).length).toBeGreaterThan(0)

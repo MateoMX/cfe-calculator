@@ -1,5 +1,6 @@
 import { forwardRef } from 'react'
 import { TARIFF_SNAPSHOT_META } from '../data/tariffs-2026'
+import { formatDisplayDate } from '../domain/dates'
 import type { FullEstimate } from '../domain/types'
 import { DailyAllowanceChart } from './DailyAllowanceChart'
 
@@ -26,8 +27,8 @@ export const EstimateResult = forwardRef<HTMLElement, Props>(function EstimateRe
       <header className="card-header">
         <h2>Estimación del recibo</h2>
         <p>
-          Datos vigentes al {estimate.dataAsOf}. Esto es una estimación; el aviso-recibo de CFE es la
-          fuente oficial.
+          Última actualización: {formatDisplayDate(estimate.dataAsOf)}. Las tarifas son correctas a
+          esta fecha. Esto es una estimación; el aviso-recibo de CFE es la fuente oficial.
         </p>
       </header>
 

@@ -176,7 +176,7 @@ function ProfileChart({
           return (
             <li key={band.key}>
               <strong>{band.label}:</strong> {money(band.ratePerKwh)}/kWh · cupo{' '}
-              {kwh(band.bandDailyKwh)} kWh/día (techo acumulado {kwh(band.cumulativeDailyKwh)})
+              {kwh(band.bandDailyKwh)} kWh/día (max cantidad {kwh(band.cumulativeDailyKwh)})
               {unused > 0
                 ? ` — quedan ${kwh(unused)} sin usar`
                 : segment && segment.usedKwh >= band.bandDailyKwh
