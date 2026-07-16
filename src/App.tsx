@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { CalculatorForm } from './components/CalculatorForm'
 import { EstimateResult } from './components/EstimateResult'
-import { getState } from './data/locations'
 import { TARIFF_OPTIONS, TARIFF_SNAPSHOT_META } from './data/tariffs-2026'
 import {
   defaultNextCutoff,
@@ -9,7 +8,7 @@ import {
   isPreviousCutoffFresh,
   SUMMER_START_OPTIONS,
 } from './domain/dates'
-import { createEmptyInput, estimateBill } from './domain/estimate'
+import { createEmptyInput, estimateBill, requiredHistorySlots } from './domain/estimate'
 import type { CalculatorInput, FullEstimate, SummerStartMonth, ValidationIssue } from './domain/types'
 import './App.css'
 
@@ -34,13 +33,6 @@ function createInputWithSavedPreferences(): CalculatorInput {
     if (!stored) return input
 
     const preferences = JSON.parse(stored) as Record<string, unknown>
-    const state =
-      typeof preferences.stateCode === 'string' ? getState(preferences.stateCode) : undefined
-    const municipality =
-      state && typeof preferences.municipality === 'string'
-        && state.municipalities.includes(preferences.municipality)
-        ? preferences.municipality
-        : ''
     const tariffCode = isTariffCode(preferences.tariffCode)
       ? preferences.tariffCode
       : input.tariffCode
@@ -70,8 +62,6 @@ function createInputWithSavedPreferences(): CalculatorInput {
 
     return {
       ...input,
-      stateCode: state?.code ?? '',
-      municipality,
       tariffCode,
       summerStartMonth,
       billingCycle,
@@ -80,6 +70,7 @@ function createInputWithSavedPreferences(): CalculatorInput {
       nextCutoffDate: previousCutoffDate
         ? defaultNextCutoff(previousCutoffDate, billingCycle)
         : input.nextCutoffDate,
+      historicalPeriodKwh: Array.from({ length: requiredHistorySlots(billingCycle) }, () => null),
     }
   } catch {
     return input
@@ -98,8 +89,6 @@ export default function App() {
       window.localStorage.setItem(
         PREFERENCES_STORAGE_KEY,
         JSON.stringify({
-          stateCode: input.stateCode,
-          municipality: input.municipality,
           tariffCode: input.tariffCode,
           summerStartMonth: input.summerStartMonth,
           billingCycle: input.billingCycle,
@@ -111,8 +100,6 @@ export default function App() {
       // The calculator remains usable when browser storage is unavailable.
     }
   }, [
-    input.stateCode,
-    input.municipality,
     input.tariffCode,
     input.summerStartMonth,
     input.billingCycle,

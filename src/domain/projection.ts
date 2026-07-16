@@ -4,12 +4,6 @@ import type { BillingCycle, CalculatorInput, ProjectionResult, ValidationIssue }
 export function validateCalculatorInput(input: CalculatorInput): ValidationIssue[] {
   const issues: ValidationIssue[] = []
 
-  if (!input.stateCode) {
-    issues.push({ field: 'stateCode', message: 'Selecciona tu estado.' })
-  }
-  if (!input.municipality) {
-    issues.push({ field: 'municipality', message: 'Selecciona tu municipio.' })
-  }
   if (!input.tariffCode) {
     issues.push({ field: 'tariffCode', message: 'Indica la tarifa de tu recibo.' })
   }

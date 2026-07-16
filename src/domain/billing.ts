@@ -26,10 +26,69 @@ import type {
   DailyBandThreshold,
   DomesticTariffCode,
   MonthNumber,
+  ProjectionResult,
   RateBlock,
   Season,
   SummerStartMonth,
 } from './types'
+
+/** Official DAC limit is monthly; convert to a daily pace for the usage bar (≈ 30-day month). */
+export function dacLimitDailyFromMonthly(limitKwhMonth: number): number {
+  return roundKwh(limitKwhMonth / 30)
+}
+
+export function requiredHistorySlots(billingCycle: BillingCycle): number {
+  return billingCycle === 'mensual' ? 12 : 6
+}
+
+function filledHistoryValues(history: Array<number | null>): number[] {
+  return history.filter(
+    (value): value is number => value != null && Number.isFinite(value) && value >= 0,
+  )
+}
+
+/**
+ * Official monthly average for DAC: sum of period consumptions over the last 12 months ÷ 12.
+ * Mensual: 12 monthly totals. Bimestral: 6 whole-receipt totals (each covers ~2 months).
+ */
+export function averageMonthlyFromHistory(
+  history: Array<number | null>,
+  billingCycle: BillingCycle,
+): number | null {
+  const required = requiredHistorySlots(billingCycle)
+  const filled = filledHistoryValues(history)
+  if (filled.length !== required || history.length < required) return null
+  // Ensure the first `required` slots are all filled (no gaps).
+  const window = history.slice(0, required)
+  if (window.some((value) => value == null || !Number.isFinite(value) || value < 0)) {
+    return null
+  }
+  const sum = window.reduce<number>((total, value) => total + (value as number), 0)
+  return roundKwh(sum / 12)
+}
+
+/**
+ * Next rolling monthly average after the current projected period replaces the oldest period.
+ * History index 0 = most recent completed period; last index = oldest.
+ */
+export function projectedNextMonthlyAverage(
+  history: Array<number | null>,
+  billingCycle: BillingCycle,
+  projectedPeriodKwh: number,
+): number | null {
+  const required = requiredHistorySlots(billingCycle)
+  const window = history.slice(0, required)
+  if (
+    window.length !== required ||
+    window.some((value) => value == null || !Number.isFinite(value) || value < 0)
+  ) {
+    return null
+  }
+  // Drop oldest (last), keep the newer required-1 periods, add the projected current period.
+  const kept = window.slice(0, required - 1) as number[]
+  const sum = kept.reduce((total, value) => total + value, 0) + Math.max(0, projectedPeriodKwh)
+  return roundKwh(sum / 12)
+}
 
 function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100
@@ -375,40 +434,143 @@ function estimateDacBill(input: CalculatorInput, projectedKwh: number): BillEsti
   }
 }
 
-export function assessDacRisk(input: CalculatorInput): DacRisk {
+export function assessDacRisk(
+  input: CalculatorInput,
+  projection?: ProjectionResult,
+): DacRisk {
+  const required = requiredHistorySlots(input.billingCycle)
+  const provided = filledHistoryValues(input.historicalPeriodKwh).length
+  const currentMonthlyPaceKwh =
+    projection != null ? roundKwh(projection.observed.averageDailyKwh * 30) : null
+  const formatMonth = (value: number) =>
+    new Intl.NumberFormat('es-MX', { maximumFractionDigits: 1 }).format(value)
+
   if (input.tariffCode === 'DAC' || input.alreadyOnDac) {
     return {
       applicable: true,
+      status: 'already_dac',
       limitKwhMonth: 0,
+      requiredHistorySlots: required,
+      providedHistorySlots: provided,
       averageMonthlyKwh: null,
+      currentMonthlyPaceKwh,
+      projectedNextAverageMonthlyKwh: null,
+      currentPaceAboveLimit: null,
       aboveLimit: true,
+      projectedAboveLimit: null,
       message:
         'Tu servicio está o se indicó como DAC. El cálculo usa cargos DAC; para volver a tarifa doméstica se requiere promedio bajo el límite durante 12 meses y trámite ante CFE.',
+      detailParagraphs: [
+        'La reclasificación a DAC no depende de un solo recibo: CFE usa el promedio móvil del consumo durante los últimos 12 meses.',
+        'Para salir de DAC debes mantener un Consumo Mensual Promedio inferior al límite de tu localidad y gestionar el cambio ante CFE.',
+      ],
     }
   }
 
   const tariff = getDomesticTariff(input.tariffCode)
-  const history = input.historicalMonthlyKwh.filter((value) => Number.isFinite(value) && value >= 0)
-  if (history.length === 0) {
+  const limit = tariff.dacLimitKwhMonth
+  const cycleLabel = input.billingCycle === 'mensual' ? 'mensuales' : 'bimestrales'
+  const historyRule =
+    input.billingCycle === 'mensual'
+      ? 'Para el promedio oficial se suman los kWh de tus últimos 12 recibos mensuales y se dividen entre 12.'
+      : 'Aunque tu facturación sea bimestral, el límite DAC se expresa en kWh/mes. Se suman los kWh de tus últimos 6 recibos (cada uno cubre ~2 meses) y se dividen entre 12.'
+
+  const currentPaceAboveLimit =
+    currentMonthlyPaceKwh != null ? currentMonthlyPaceKwh > limit : null
+
+  const average = averageMonthlyFromHistory(input.historicalPeriodKwh, input.billingCycle)
+  if (average == null) {
+    const missing = Math.max(0, required - provided)
+    const paceNote =
+      currentPaceAboveLimit === true && currentMonthlyPaceKwh != null
+        ? `Si mantuvieras durante un mes el ritmo observado en este periodo, usarías aproximadamente ${formatMonth(currentMonthlyPaceKwh)} kWh/mes, por encima del límite de ${limit} kWh/mes. Esta es una proyección de tu uso actual, no tu promedio móvil DAC.`
+        : currentMonthlyPaceKwh != null
+          ? `Si mantuvieras durante un mes el ritmo observado en este periodo, usarías aproximadamente ${formatMonth(currentMonthlyPaceKwh)} kWh/mes (límite ${limit} kWh/mes). Esta es una proyección de tu uso actual, no tu promedio móvil DAC.`
+          : ''
+
     return {
       applicable: true,
-      limitKwhMonth: tariff.dacLimitKwhMonth,
+      status: 'incomplete_history',
+      limitKwhMonth: limit,
+      requiredHistorySlots: required,
+      providedHistorySlots: provided,
       averageMonthlyKwh: null,
+      currentMonthlyPaceKwh,
+      projectedNextAverageMonthlyKwh: null,
+      currentPaceAboveLimit,
       aboveLimit: null,
-      message: `Límite DAC de ${tariff.name}: ${tariff.dacLimitKwhMonth} kWh/mes promedio. Puedes capturar el historial opcional para estimar el riesgo.`,
+      projectedAboveLimit: null,
+      message: `Límite DAC de ${tariff.name}: ${limit} kWh/mes. ${paceNote} Para estimar tu promedio móvil de 12 meses y el riesgo real de DAC necesitamos tus últimos ${required} consumos ${cycleLabel}. Faltan ${missing} por capturar.`,
+      detailParagraphs: [
+        historyRule,
+        'CFE determina el riesgo DAC con el promedio móvil de 12 meses, no con la proyección de un solo periodo. Sin esos consumos previos no podemos estimar tu promedio real ni confirmar si estás en riesgo de alto consumo.',
+        provided === 0
+          ? `Captura los ${required} consumos ${cycleLabel} en la sección opcional del formulario (el “Consumo (kWh)” de cada recibo en tu historial CFE).`
+          : `Ya capturaste ${provided} de ${required}. Completa los ${missing} faltantes para calcular tu promedio de 12 meses y una proyección del siguiente ciclo.`,
+      ],
     }
   }
 
-  const average = history.reduce((sum, value) => sum + value, 0) / history.length
-  const above = average > tariff.dacLimitKwhMonth
+  const projectedNext =
+    projection != null
+      ? projectedNextMonthlyAverage(
+          input.historicalPeriodKwh,
+          input.billingCycle,
+          projection.projectedKwh,
+        )
+      : null
+  const aboveLimit = average > limit
+  const projectedAboveLimit = projectedNext != null ? projectedNext > limit : null
+  const status =
+    aboveLimit
+      ? 'above_limit'
+      : projectedAboveLimit
+        ? 'projected_crossing'
+        : 'below_limit'
+
+  const detailParagraphs = [
+    historyRule,
+    `Tu promedio de los últimos 12 meses es ${formatMonth(average)} kWh/mes (límite ${limit} kWh/mes).`,
+  ]
+
+  if (currentMonthlyPaceKwh != null) {
+    detailParagraphs.push(
+      `Si mantienes tu ritmo actual (~${formatMonth(currentMonthlyPaceKwh)} kWh/mes), el consumo proyectado de este periodo es ${formatMonth(projection!.projectedKwh)} kWh.`,
+    )
+  }
+
+  if (projectedNext != null) {
+    detailParagraphs.push(
+      projectedAboveLimit
+        ? `Al reemplazar el periodo más antiguo con este consumo proyectado, el promedio móvil estimado quedaría en ${formatMonth(projectedNext)} kWh/mes: superior al límite DAC.`
+        : `Al reemplazar el periodo más antiguo con este consumo proyectado, el promedio móvil estimado quedaría en ${formatMonth(projectedNext)} kWh/mes: aún bajo el límite DAC.`,
+    )
+  }
+
+  const message = aboveLimit
+    ? `Tu promedio de 12 meses (${formatMonth(average)} kWh/mes) ya es superior al límite de ${limit} kWh/mes. Hay riesgo de reclasificación a DAC.`
+    : projectedAboveLimit && projectedNext != null
+      ? `Tu promedio de 12 meses (${formatMonth(average)} kWh/mes) aún está bajo el límite, pero si mantienes este ritmo el promedio estimado del siguiente ciclo (${formatMonth(projectedNext)} kWh/mes) sería superior a ${limit} kWh/mes.`
+      : `Tu promedio de 12 meses (${formatMonth(average)} kWh/mes) está bajo el límite de ${limit} kWh/mes.${
+          projectedNext != null
+            ? ` Con el ritmo actual, el promedio estimado del siguiente ciclo sería ${formatMonth(projectedNext)} kWh/mes.`
+            : ''
+        }`
+
   return {
     applicable: true,
-    limitKwhMonth: tariff.dacLimitKwhMonth,
-    averageMonthlyKwh: roundKwh(average),
-    aboveLimit: above,
-    message: above
-      ? `Tu promedio capturado (${average.toFixed(1)} kWh/mes) supera el límite de ${tariff.dacLimitKwhMonth} kWh/mes. Riesgo de reclasificación a DAC si se mantiene 12 meses.`
-      : `Tu promedio capturado (${average.toFixed(1)} kWh/mes) está bajo el límite de ${tariff.dacLimitKwhMonth} kWh/mes.`,
+    status,
+    limitKwhMonth: limit,
+    requiredHistorySlots: required,
+    providedHistorySlots: provided,
+    averageMonthlyKwh: average,
+    currentMonthlyPaceKwh,
+    projectedNextAverageMonthlyKwh: projectedNext,
+    currentPaceAboveLimit,
+    aboveLimit,
+    projectedAboveLimit,
+    message,
+    detailParagraphs,
   }
 }
 
@@ -554,11 +716,19 @@ export function buildDailyAllowanceComparison(
       profiles: [],
       guidance:
         'La tarifa DAC no tiene bloques subsidiados (Básico/Intermedio): toda la energía se cobra a la cuota DAC más el cargo fijo.',
+      dacLimitDailyKwh: null,
+      dacLimitKwhMonth: null,
+      currentPaceAboveDacLimit: null,
     }
   }
 
   const code = input.tariffCode
   const days = Math.max(1, billingDays)
+  const tariff = getDomesticTariff(code)
+  const dacLimitKwhMonth = tariff.dacLimitKwhMonth
+  const dacLimitDailyKwh = dacLimitDailyFromMonthly(dacLimitKwhMonth)
+  const avgDaily = roundKwh(averageDailyKwh)
+  const currentPaceAboveDacLimit = avgDaily > dacLimitDailyKwh
 
   if (seasonMode === 'mixto') {
     // Mixto bills two monthly halves independently; each profile uses one month of blocks
@@ -584,7 +754,7 @@ export function buildDailyAllowanceComparison(
     return {
       applicable: true,
       mode: 'mixto',
-      averageDailyKwh: roundKwh(averageDailyKwh),
+      averageDailyKwh: avgDaily,
       billingDays: days,
       profiles: [fuera, verano],
       guidance: [
@@ -592,6 +762,9 @@ export function buildDailyAllowanceComparison(
         `Fuera de verano: ${guidanceForProfile(averageDailyKwh, fuera)}`,
         `Verano: ${guidanceForProfile(averageDailyKwh, verano)}`,
       ].join(' '),
+      dacLimitDailyKwh,
+      dacLimitKwhMonth,
+      currentPaceAboveDacLimit,
     }
   }
 
@@ -602,9 +775,12 @@ export function buildDailyAllowanceComparison(
   return {
     applicable: true,
     mode: seasonMode,
-    averageDailyKwh: roundKwh(averageDailyKwh),
+    averageDailyKwh: avgDaily,
     billingDays: days,
     profiles: [profile],
     guidance: guidanceForProfile(averageDailyKwh, profile),
+    dacLimitDailyKwh,
+    dacLimitKwhMonth,
+    currentPaceAboveDacLimit,
   }
 }

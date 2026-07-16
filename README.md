@@ -43,7 +43,7 @@ npm run preview
 6. **Verano**: seis meses consecutivos desde el mes de inicio local. Periodos mixtos usan umbrales de 15/16, 30/31 y 45/46 días.
 7. **Mínimo**: 25 kWh mensuales (50 kWh en bimestre).
 8. **IVA**: 16% sobre energía y cargos opcionales capturados.
-9. **DAC**: no se reclasifica automáticamente por un solo periodo; se puede seleccionar si ya aparece en el recibo o estimar riesgo con historial opcional.
+9. **DAC**: no se reclasifica automáticamente por un solo periodo. CFE usa el **promedio móvil de los últimos 12 meses** frente al límite de alto consumo de la tarifa. Con historial opcional se puede estimar ese promedio: 12 consumos mensuales o 6 totales bimestrales (`suma / 12`). El ritmo actual del periodo se compara con el umbral diario de referencia (`límite mensual / 30`) en la barra de cupos.
 
 ### Ejemplo de aceptación
 
@@ -57,6 +57,7 @@ npm run preview
 Fotografía estática vigente al **16 de julio de 2026**:
 
 - [CFE Tarifas Hogar](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/)
+- [Tarifa DAC (CFE)](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Tarifas/TarifaDAC.aspx) (definición de Consumo Mensual Promedio y límites)
 - [Acuerdos / oficios SHCP en CFE](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Acuerdos/AcuerdosCasa.aspx) (p. ej. 349-B-1-070 y oficios DAC mensuales)
 - [Manual de disposiciones de facturación (DOF)](http://www.diputados.gob.mx/LeyesBiblio/regla/n365.pdf)
 
@@ -68,7 +69,6 @@ Las cuotas 1B de julio 2026 (verano) se verificaron en el portal CFE: básico `1
 - CFE asigna tarifa y verano por **localidad**; no publica un catálogo completo abierto. Por eso la herramienta pide confirmar tarifa y mes de inicio de verano con tu recibo.
 - DAP, adeudos, créditos y convenios municipales no se estiman automáticamente (puedes capturar un cargo opcional conocido).
 - Los precios cambian mensualmente; actualiza a mano [`src/data/tariffs-2026.ts`](src/data/tariffs-2026.ts) cuando publiques una nueva fotografía.
-- Apoyos regionales (Sonora, Sinaloa, Nayarit, Baja California, Tabasco, etc.) se muestran como avisos y requieren confirmación en el recibo.
 
 ## Privacidad
 

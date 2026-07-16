@@ -1,6 +1,10 @@
-import { regionalNotesFor } from '../data/locations'
 import { TARIFF_SNAPSHOT_META } from '../data/tariffs-2026'
-import { assessDacRisk, buildDailyAllowanceComparison, estimateDomesticBill } from './billing'
+import {
+  assessDacRisk,
+  buildDailyAllowanceComparison,
+  estimateDomesticBill,
+  requiredHistorySlots,
+} from './billing'
 import { formatDisplayDate, isSummerMonth, monthNumber, todayISO } from './dates'
 import { projectConsumption, validateCalculatorInput } from './projection'
 import type { CalculatorInput, FullEstimate, ValidationIssue } from './types'
@@ -63,8 +67,7 @@ export function estimateBill(input: CalculatorInput): {
 
   const projection = projectConsumption(input)
   const bill = estimateDomesticBill(input, projection.projectedKwh)
-  const dacRisk = assessDacRisk(input)
-  const regionalNotes = regionalNotesFor(input.stateCode, input.municipality)
+  const dacRisk = assessDacRisk(input, projection)
   const dailyAllowance = buildDailyAllowanceComparison(
     input,
     projection.observed.averageDailyKwh,
@@ -80,7 +83,6 @@ export function estimateBill(input: CalculatorInput): {
     bill,
     narrative: '',
     dacRisk,
-    regionalNotes,
     dataAsOf: TARIFF_SNAPSHOT_META.asOf,
     dailyAllowance,
   }
@@ -90,8 +92,6 @@ export function estimateBill(input: CalculatorInput): {
 
 export function createEmptyInput(): CalculatorInput {
   return {
-    stateCode: '',
-    municipality: '',
     tariffCode: '1B',
     summerStartMonth: 5,
     billingCycle: 'bimestral',
@@ -103,6 +103,24 @@ export function createEmptyInput(): CalculatorInput {
     optionalOtherCharges: 0,
     alreadyOnDac: false,
     dacRegionId: 'central',
-    historicalMonthlyKwh: [],
+    historicalPeriodKwh: Array.from({ length: 6 }, () => null),
   }
+}
+
+export { requiredHistorySlots }
+
+/** Resize / clear history slots when the billing cycle changes. */
+export function resizeHistoryForCycle(
+  previous: Array<number | null>,
+  nextCycle: CalculatorInput['billingCycle'],
+  previousCycle: CalculatorInput['billingCycle'],
+): Array<number | null> {
+  const nextLength = requiredHistorySlots(nextCycle)
+  if (previousCycle === nextCycle) {
+    const padded = previous.slice(0, nextLength)
+    while (padded.length < nextLength) padded.push(null)
+    return padded
+  }
+  // Monthly ↔ bimonthly conversion would invent data; start fresh.
+  return Array.from({ length: nextLength }, () => null)
 }

@@ -1,12 +1,15 @@
 import { forwardRef } from 'react'
 import { TARIFF_SNAPSHOT_META } from '../data/tariffs-2026'
 import { formatDisplayDate } from '../domain/dates'
-import type { FullEstimate } from '../domain/types'
+import type { DacRisk, FullEstimate } from '../domain/types'
 import { DailyAllowanceChart } from './DailyAllowanceChart'
 
 interface Props {
   estimate: FullEstimate
 }
+
+const DAC_OFFICIAL_URL =
+  'https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Tarifas/TarifaDAC.aspx'
 
 function money(value: number): string {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value)
@@ -16,11 +19,72 @@ function kwh(value: number): string {
   return new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }).format(value)
 }
 
+function dacPanelTone(status: DacRisk['status']): string {
+  if (status === 'above_limit' || status === 'already_dac') return 'dac-risk-panel--alert'
+  if (status === 'projected_crossing' || status === 'incomplete_history') return 'dac-risk-panel--warn'
+  return 'dac-risk-panel--ok'
+}
+
+function DacRiskPanel({ dacRisk }: { dacRisk: DacRisk }) {
+  return (
+    <section className={`dac-risk-panel ${dacPanelTone(dacRisk.status)}`} aria-live="polite">
+      <h3>Riesgo DAC</h3>
+      <p className="dac-risk-summary">{dacRisk.message}</p>
+
+      {dacRisk.status !== 'already_dac' && (
+        <div className="dac-risk-stats">
+          <div>
+            <span>Límite de alto consumo</span>
+            <strong>{dacRisk.limitKwhMonth} kWh/mes</strong>
+          </div>
+          <div>
+            <span>Historial capturado</span>
+            <strong>
+              {dacRisk.providedHistorySlots} / {dacRisk.requiredHistorySlots} periodos
+            </strong>
+          </div>
+          {dacRisk.averageMonthlyKwh != null && (
+            <div>
+              <span>Promedio 12 meses</span>
+              <strong>{kwh(dacRisk.averageMonthlyKwh)} kWh/mes</strong>
+            </div>
+          )}
+          {dacRisk.currentMonthlyPaceKwh != null && (
+            <div>
+              <span>Uso mensual proyectado con tu ritmo actual</span>
+              <strong>{kwh(dacRisk.currentMonthlyPaceKwh)} kWh/mes</strong>
+            </div>
+          )}
+          {dacRisk.projectedNextAverageMonthlyKwh != null && (
+            <div>
+              <span>Promedio estimado del siguiente ciclo</span>
+              <strong>{kwh(dacRisk.projectedNextAverageMonthlyKwh)} kWh/mes</strong>
+            </div>
+          )}
+        </div>
+      )}
+
+      <ul className="dac-risk-details">
+        {dacRisk.detailParagraphs.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+        <li>
+          Consulta la definición oficial del Consumo Mensual Promedio y los límites en la{' '}
+          <a href={DAC_OFFICIAL_URL} target="_blank" rel="noreferrer">
+            tarifa DAC de CFE
+          </a>
+          .
+        </li>
+      </ul>
+    </section>
+  )
+}
+
 export const EstimateResult = forwardRef<HTMLElement, Props>(function EstimateResult(
   { estimate },
   ref,
 ) {
-  const { bill, projection, narrative, dacRisk, regionalNotes } = estimate
+  const { bill, projection, narrative, dacRisk } = estimate
 
   return (
     <section ref={ref} className="card result" aria-live="polite">
@@ -117,22 +181,18 @@ export const EstimateResult = forwardRef<HTMLElement, Props>(function EstimateRe
         ))}
       </ul>
 
-      {(bill.warnings.length > 0 || regionalNotes.length > 0) && (
+      {bill.warnings.length > 0 && (
         <>
           <h3>Avisos</h3>
           <ul className="warnings">
             {bill.warnings.map((item) => (
               <li key={item}>{item}</li>
             ))}
-            {regionalNotes.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
           </ul>
         </>
       )}
 
-      <h3>Riesgo DAC</h3>
-      <p>{dacRisk.message}</p>
+      <DacRiskPanel dacRisk={dacRisk} />
 
       <footer className="sources">
         <h3>Fuentes</h3>
@@ -145,6 +205,11 @@ export const EstimateResult = forwardRef<HTMLElement, Props>(function EstimateRe
           <li>
             <a href={TARIFF_SNAPSHOT_META.agreementsUrl} target="_blank" rel="noreferrer">
               Acuerdos y oficios SHCP en CFE
+            </a>
+          </li>
+          <li>
+            <a href={DAC_OFFICIAL_URL} target="_blank" rel="noreferrer">
+              Tarifa DAC (CFE): consumo mensual promedio y límites
             </a>
           </li>
           <li>

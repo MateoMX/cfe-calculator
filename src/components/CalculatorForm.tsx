@@ -1,5 +1,5 @@
+import { useId, useState } from 'react'
 import { DAC_REGIONS, TARIFF_OPTIONS } from '../data/tariffs-2026'
-import { getState, STATES } from '../data/locations'
 import {
   daysAgoLabel,
   defaultNextCutoff,
@@ -7,7 +7,13 @@ import {
   SUMMER_START_OPTIONS,
   todayISO,
 } from '../domain/dates'
+import { requiredHistorySlots, resizeHistoryForCycle } from '../domain/estimate'
 import type { BillingCycle, CalculatorInput, DomesticTariffCode, SummerStartMonth, ValidationIssue } from '../domain/types'
+import {
+  BillExampleDialog,
+  BillExampleInfoButton,
+  type BillExampleKey,
+} from './BillExampleDialog'
 
 interface Props {
   value: CalculatorInput
@@ -21,7 +27,11 @@ function fieldError(issues: ValidationIssue[], field: keyof CalculatorInput): st
 }
 
 export function CalculatorForm({ value, issues, onChange, onSubmit }: Props) {
-  const state = getState(value.stateCode)
+  const [activeExample, setActiveExample] = useState<BillExampleKey | null>(null)
+  const fieldIds = useId()
+  const tariffFieldId = `${fieldIds}-tariff`
+  const previousReadingFieldId = `${fieldIds}-previous-reading`
+  const previousCutoffFieldId = `${fieldIds}-previous-cutoff`
   const needsSummer = value.tariffCode !== '1'
   const showDacRegion = value.tariffCode === 'DAC' || value.alreadyOnDac
   const cycleDays = value.billingCycle === 'mensual' ? 30 : 60
@@ -43,59 +53,22 @@ export function CalculatorForm({ value, issues, onChange, onSubmit }: Props) {
     >
       <header className="card-header">
         <h2>Datos de tu servicio</h2>
-        <p>
-          Confirma la tarifa y el mes de inicio de verano con tu recibo CFE. La ubicación solo orienta
-          avisos regionales.
-        </p>
+        <p>Confirma la tarifa y el mes de inicio de verano con tu recibo CFE.</p>
       </header>
 
       <fieldset>
-        <legend>Ubicación</legend>
-        <label>
-          Estado
-          <select
-            value={value.stateCode}
-            onChange={(event) =>
-              patch({ stateCode: event.target.value, municipality: '' })
-            }
-          >
-            <option value="">Selecciona…</option>
-            {STATES.map((item) => (
-              <option key={item.code} value={item.code}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          {fieldError(issues, 'stateCode') && (
-            <span className="error">{fieldError(issues, 'stateCode')}</span>
-          )}
-        </label>
-
-        <label>
-          Municipio
-          <select
-            value={value.municipality}
-            disabled={!state}
-            onChange={(event) => patch({ municipality: event.target.value })}
-          >
-            <option value="">Selecciona…</option>
-            {state?.municipalities.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-          {fieldError(issues, 'municipality') && (
-            <span className="error">{fieldError(issues, 'municipality')}</span>
-          )}
-        </label>
-      </fieldset>
-
-      <fieldset>
         <legend>Tarifa y ciclo</legend>
-        <label>
-          Tarifa impresa en tu recibo
+        <div className="form-field">
+          <div className="field-label-row">
+            <label htmlFor={tariffFieldId}>Tarifa impresa en tu recibo</label>
+            <BillExampleInfoButton
+              exampleKey="tariff"
+              label="Ver en el recibo dónde está la tarifa"
+              onOpen={setActiveExample}
+            />
+          </div>
           <select
+            id={tariffFieldId}
             value={value.tariffCode}
             onChange={(event) => {
               const tariffCode = event.target.value as DomesticTariffCode
@@ -112,7 +85,7 @@ export function CalculatorForm({ value, issues, onChange, onSubmit }: Props) {
               </option>
             ))}
           </select>
-        </label>
+        </div>
 
         {needsSummer && (
           <label>
@@ -149,7 +122,15 @@ export function CalculatorForm({ value, issues, onChange, onSubmit }: Props) {
                 value.previousCutoffDate
                   ? defaultNextCutoff(value.previousCutoffDate, billingCycle)
                   : value.nextCutoffDate
-              patch({ billingCycle, nextCutoffDate })
+              patch({
+                billingCycle,
+                nextCutoffDate,
+                historicalPeriodKwh: resizeHistoryForCycle(
+                  value.historicalPeriodKwh,
+                  billingCycle,
+                  value.billingCycle,
+                ),
+              })
             }}
           >
             <option value="bimestral">Bimestral (aprox. 60 días)</option>
@@ -185,9 +166,19 @@ export function CalculatorForm({ value, issues, onChange, onSubmit }: Props) {
 
       <fieldset>
         <legend>Lecturas y fechas</legend>
-        <label>
-          Lectura anterior (kWh del medidor al corte previo)
+        <div className="form-field">
+          <div className="field-label-row">
+            <label htmlFor={previousReadingFieldId}>
+              Lectura anterior (kWh del medidor al corte previo)
+            </label>
+            <BillExampleInfoButton
+              exampleKey="previousReading"
+              label="Ver en el recibo dónde está la lectura anterior"
+              onOpen={setActiveExample}
+            />
+          </div>
           <input
+            id={previousReadingFieldId}
             type="number"
             min={0}
             step={1}
@@ -197,10 +188,17 @@ export function CalculatorForm({ value, issues, onChange, onSubmit }: Props) {
           {fieldError(issues, 'previousReading') && (
             <span className="error">{fieldError(issues, 'previousReading')}</span>
           )}
-        </label>
+        </div>
 
-        <label>
-          Fecha de corte del recibo anterior
+        <div className="form-field">
+          <div className="field-label-row">
+            <label htmlFor={previousCutoffFieldId}>Fecha de corte del recibo anterior</label>
+            <BillExampleInfoButton
+              exampleKey="previousCutoffDate"
+              label="Ver en el recibo dónde está la fecha de la última lectura"
+              onOpen={setActiveExample}
+            />
+          </div>
           <span
             className={
               previousCutoffAgo
@@ -211,6 +209,7 @@ export function CalculatorForm({ value, issues, onChange, onSubmit }: Props) {
             }
           >
             <input
+              id={previousCutoffFieldId}
               type="date"
               value={value.previousCutoffDate}
               onChange={(event) => {
@@ -232,7 +231,7 @@ export function CalculatorForm({ value, issues, onChange, onSubmit }: Props) {
           {fieldError(issues, 'previousCutoffDate') && (
             <span className="error">{fieldError(issues, 'previousCutoffDate')}</span>
           )}
-        </label>
+        </div>
 
         <label>
           Lectura actual (kWh del medidor hoy)
@@ -307,23 +306,76 @@ export function CalculatorForm({ value, issues, onChange, onSubmit }: Props) {
             />
           </label>
 
-          <label>
-            Historial mensual opcional para riesgo DAC (kWh separados por coma)
-            <input
-              type="text"
-              placeholder="ej. 180, 210, 195, 240"
-              value={value.historicalMonthlyKwh.join(', ')}
-              onChange={(event) => {
-                const historicalMonthlyKwh = event.target.value
-                  .split(/[,\s]+/)
-                  .map((part) => part.trim())
-                  .filter(Boolean)
-                  .map(Number)
-                  .filter((n) => Number.isFinite(n))
-                patch({ historicalMonthlyKwh })
-              }}
-            />
-          </label>
+          <div className="history-dac">
+            <div className="field-label-row">
+              <h3>Historial para riesgo DAC (opcional)</h3>
+              <BillExampleInfoButton
+                exampleKey="dacHistory"
+                label="Ver en el recibo dónde está el historial de consumo DAC"
+                onOpen={setActiveExample}
+              />
+            </div>
+            <p className="history-dac-help">
+              {value.billingCycle === 'mensual' ? (
+                <>
+                  CFE usa el <strong>promedio móvil de los últimos 12 meses</strong>. En el historial de
+                  tu recibo, captura el <strong>Consumo (kWh)</strong> de tus últimos{' '}
+                  {requiredHistorySlots('mensual')} recibos mensuales (del más reciente al más antiguo).
+                  El promedio es la suma de esos kWh dividida entre 12.
+                </>
+              ) : (
+                <>
+                  CFE usa el <strong>promedio móvil de los últimos 12 meses</strong>, aunque tu
+                  facturación sea bimestral. En el historial de tu recibo, captura el{' '}
+                  <strong>Consumo (kWh)</strong> de tus últimos {requiredHistorySlots('bimestral')}{' '}
+                  recibos (cada uno cubre ~2 meses), del más reciente al más antiguo. Se suman esos
+                  totales y se dividen entre 12.
+                </>
+              )}
+            </p>
+            <p className="history-dac-help history-dac-help--note">
+              Si cambias entre mensual y bimestral, borramos el historial capturado porque no se puede
+              convertir sin inventar datos.
+            </p>
+            <div
+              className={`history-dac-grid ${
+                value.billingCycle === 'mensual' ? 'history-dac-grid--mensual' : 'history-dac-grid--bimestral'
+              }`}
+              role="group"
+              aria-label={
+                value.billingCycle === 'mensual'
+                  ? 'Consumos kWh de los últimos 12 recibos mensuales'
+                  : 'Consumos kWh de los últimos 6 recibos bimestrales'
+              }
+            >
+              {Array.from({ length: requiredHistorySlots(value.billingCycle) }, (_, index) => {
+                const slotValue = value.historicalPeriodKwh[index]
+                const slotCount = requiredHistorySlots(value.billingCycle)
+                return (
+                  <input
+                    key={`history-${value.billingCycle}-${index}`}
+                    type="number"
+                    min={0}
+                    step={1}
+                    inputMode="numeric"
+                    placeholder="kWh"
+                    aria-label={`Consumo histórico ${index + 1} de ${slotCount} (kWh)`}
+                    value={slotValue ?? ''}
+                    onChange={(event) => {
+                      const raw = event.target.value
+                      const next = [...value.historicalPeriodKwh]
+                      while (next.length < slotCount) {
+                        next.push(null)
+                      }
+                      next[index] =
+                        raw === '' ? null : Number.isFinite(Number(raw)) ? Number(raw) : null
+                      patch({ historicalPeriodKwh: next })
+                    }}
+                  />
+                )
+              })}
+            </div>
+          </div>
         </div>
       </details>
 
@@ -334,6 +386,8 @@ export function CalculatorForm({ value, issues, onChange, onSubmit }: Props) {
       <button type="submit" className="primary">
         Calcular estimación
       </button>
+
+      <BillExampleDialog exampleKey={activeExample} onClose={() => setActiveExample(null)} />
     </form>
   )
 }

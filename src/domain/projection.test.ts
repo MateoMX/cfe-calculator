@@ -6,8 +6,6 @@ describe('projection', () => {
   it('calculates 200 kWh in 16 days as 12.5 kWh/day', () => {
     const input = {
       ...createEmptyInput(),
-      stateCode: 'YUC',
-      municipality: 'Mérida',
       previousReading: 1000,
       currentReading: 1200,
       previousCutoffDate: '2026-06-30',
@@ -29,8 +27,6 @@ describe('projection', () => {
   it('rejects inverted readings and dates', () => {
     const issues = validateCalculatorInput({
       ...createEmptyInput(),
-      stateCode: 'YUC',
-      municipality: 'Mérida',
       previousReading: 1200,
       currentReading: 1000,
       previousCutoffDate: '2026-07-16',

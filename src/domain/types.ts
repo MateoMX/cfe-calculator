@@ -58,8 +58,6 @@ export interface TariffSnapshotMeta {
 }
 
 export interface CalculatorInput {
-  stateCode: string
-  municipality: string
   tariffCode: DomesticTariffCode
   summerStartMonth: SummerStartMonth | null
   billingCycle: BillingCycle
@@ -71,7 +69,13 @@ export interface CalculatorInput {
   optionalOtherCharges: number
   alreadyOnDac: boolean
   dacRegionId: string
-  historicalMonthlyKwh: number[]
+  /**
+   * Billing-period consumptions from prior receipts (kWh per period).
+   * Mensual: up to 12 monthly totals. Bimestral: up to 6 whole-receipt totals.
+   * Index 0 is the most recent completed period; higher indexes are older.
+   * Null slots are empty / not yet provided.
+   */
+  historicalPeriodKwh: Array<number | null>
 }
 
 export interface ValidationIssue {
@@ -116,12 +120,32 @@ export interface BillEstimate {
   warnings: string[]
 }
 
+export type DacRiskStatus =
+  | 'already_dac'
+  | 'incomplete_history'
+  | 'below_limit'
+  | 'above_limit'
+  | 'projected_crossing'
+
 export interface DacRisk {
   applicable: boolean
+  status: DacRiskStatus
   limitKwhMonth: number
+  requiredHistorySlots: number
+  providedHistorySlots: number
+  /** Rolling monthly average from a complete 12-month window (sum of period totals / 12). */
   averageMonthlyKwh: number | null
+  /** Current observed pace expressed as kWh/mes (daily average × 30). */
+  currentMonthlyPaceKwh: number | null
+  /** Estimated next rolling average after replacing the oldest period with the projected current period. */
+  projectedNextAverageMonthlyKwh: number | null
+  currentPaceAboveLimit: boolean | null
+  /** Whether the completed historical average is already above the DAC limit. */
   aboveLimit: boolean | null
+  /** Whether the projected next rolling average would be above the DAC limit. */
+  projectedAboveLimit: boolean | null
   message: string
+  detailParagraphs: string[]
 }
 
 /** Finite subsidized band expressed as an average daily allowance. */
@@ -153,6 +177,12 @@ export interface DailyAllowanceComparison {
   billingDays: number
   profiles: DailyAllowanceProfile[]
   guidance: string
+  /** Official DAC monthly limit expressed as an average daily pace (kWh/día ≈ limit/30). */
+  dacLimitDailyKwh: number | null
+  /** Official DAC monthly limit for the selected domestic tariff. */
+  dacLimitKwhMonth: number | null
+  /** True when the current daily pace exceeds the DAC daily equivalent. */
+  currentPaceAboveDacLimit: boolean | null
 }
 
 export interface FullEstimate {
@@ -161,7 +191,6 @@ export interface FullEstimate {
   bill: BillEstimate
   narrative: string
   dacRisk: DacRisk
-  regionalNotes: string[]
   dataAsOf: string
   dailyAllowance: DailyAllowanceComparison
 }
