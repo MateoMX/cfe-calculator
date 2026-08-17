@@ -95,6 +95,14 @@ describe('DailyAllowanceChart display scale preference', () => {
     expect(screen.queryByRole('tab', { name: 'Bimonthly' })).not.toBeInTheDocument()
     expect(window.localStorage.getItem(DISPLAY_SCALE_STORAGE_KEY)).toBe('monthly')
   })
+
+  it('renders single-period bands in the same section cards as mixed period', () => {
+    renderChart()
+
+    expect(document.querySelectorAll('.allowance-band-card').length).toBeGreaterThanOrEqual(3)
+    expect(document.querySelectorAll('.allowance-band-card-swatch').length).toBeGreaterThanOrEqual(3)
+    expect(document.querySelector('.allowance-chart--vertical .allowance-vbar-legend')).not.toBeNull()
+  })
 })
 
 describe('DailyAllowanceChart mixed period', () => {
@@ -126,7 +134,7 @@ describe('DailyAllowanceChart mixed period', () => {
 
     const firstColumnLabels = [
       ...document.querySelectorAll(
-        '.allowance-mixed-column:first-child .allowance-mixed-detail-label',
+        '.allowance-mixed-column:first-child .allowance-band-card-label',
       ),
     ].map((node) => node.textContent)
     expect(firstColumnLabels[0]).toMatch(/Excess/i)

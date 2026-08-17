@@ -1144,52 +1144,7 @@
 }
 
 .allowance-mixed-detail {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 0.22rem;
   flex: 1 1 auto;
-  min-width: 0;
-  padding: 0.48rem 0.6rem;
-  border: 1px solid color-mix(in srgb, var(--border, #d5dde7) 80%, transparent);
-  border-radius: 0.55rem;
-  background: color-mix(in srgb, var(--surface, #fff) 92%, var(--zone-color) 8%);
-}
-
-.allowance-mixed-detail-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.2rem 0.7rem;
-  min-width: 0;
-}
-
-.allowance-mixed-detail-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  min-width: 0;
-  color: var(--text);
-  font-size: 0.88rem;
-  font-weight: 700;
-  line-height: 1.25;
-}
-
-.allowance-mixed-detail-swatch {
-  width: 0.75rem;
-  height: 0.75rem;
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: var(--zone-color);
-}
-
-.allowance-mixed-detail-rate {
-  color: var(--accent);
-  font-size: 0.78rem;
-  font-weight: 700;
-  line-height: 1.25;
-  white-space: nowrap;
 }
 
 @media (max-width: 720px) {
@@ -1269,8 +1224,8 @@
    are small triangles pinned in the gutter and explained by a legend below. */
 .allowance-chart--vertical {
   --allowance-marker-gutter: 0.85rem;
-  --allowance-bar-width: 2.75rem;
-  --allowance-col-gap: 0.55rem;
+  --allowance-bar-width: 1.35rem;
+  --allowance-col-gap: 0.7rem;
   position: relative;
   display: grid;
   grid-template-columns: var(--allowance-marker-gutter) var(--allowance-bar-width) minmax(0, 1fr);
@@ -1292,7 +1247,7 @@
   width: 100%;
   height: 100%;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 999px;
   overflow: hidden;
   background: #fff;
 }
@@ -1345,18 +1300,10 @@
 .allowance-vbar-legend {
   display: flex;
   flex-direction: column-reverse;
+  gap: 0.45rem;
   grid-column: 3;
   height: 100%;
   min-width: 0;
-}
-
-.allowance-vbar-legend-item {
-  display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.2fr);
-  align-items: center;
-  column-gap: 0.55rem;
-  min-height: 0;
-  padding: 0.1rem 0 0.1rem 0.1rem;
 }
 
 .allowance-dac-alert {
@@ -1492,33 +1439,53 @@
   }
 }
 
-.allowance-bar-label {
-  align-self: flex-start;
-  max-width: 100%;
-  padding: 0.04rem 0.4rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  line-height: 1.3;
-  background: color-mix(in srgb, var(--zone-color) 16%, #fff);
-  color: color-mix(in srgb, var(--zone-color) 82%, #000);
-}
-
-.allowance-bar-identity {
+.allowance-band-card {
   display: flex;
-  min-width: 0;
   flex-direction: column;
   justify-content: center;
-  align-items: flex-start;
-  gap: 0.15rem;
+  gap: 0.22rem;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.48rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--border, #d5dde7) 80%, transparent);
+  border-radius: 0.55rem;
+  background: color-mix(in srgb, var(--surface, #fff) 92%, var(--zone-color) 8%);
 }
 
-.allowance-bar-rate {
-  font-size: 0.72rem;
+.allowance-band-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.2rem 0.7rem;
+  min-width: 0;
+}
+
+.allowance-band-card-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  color: var(--text);
+  font-size: 0.88rem;
   font-weight: 700;
+  line-height: 1.25;
+}
+
+.allowance-band-card-swatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--zone-color);
+}
+
+.allowance-band-card-rate {
   color: var(--accent);
-  line-height: 1.15;
-  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .allowance-band-usage {
@@ -1536,6 +1503,7 @@
 
 .allowance-band-usage-copy {
   min-width: 0;
+  color: color-mix(in srgb, #e3b21a 72%, #4a3800);
 }
 
 .allowance-band-usage-copy small {

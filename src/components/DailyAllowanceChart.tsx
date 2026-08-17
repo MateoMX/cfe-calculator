@@ -208,7 +208,7 @@ function mixtoProfileToMonthly(
 // collide. We first try to satisfy that floor by growing the bar to scale, and
 // only when that would exceed the height budget do we render the smallest
 // blocks out of scale (pinned to the floor) so the text always fits.
-const MIN_SEGMENT_PX = 62
+const MIN_SEGMENT_PX = 72
 const BASE_HEIGHT_PX = 272
 const MAX_VIEWPORT_RATIO = 0.7
 const MAX_FLOOR_PX = 400
@@ -300,6 +300,51 @@ function usedPercent(segment: ZoneSegment): number {
   const total = segment.usedKwh + segment.unusedKwh
   if (total <= 0) return 0
   return Math.min(100, Math.round((segment.usedKwh / total) * 100))
+}
+
+function BandDetailCard({
+  segment,
+  formatBand,
+  money,
+  unit,
+  t,
+  as: Tag = 'div',
+  className,
+  style,
+}: {
+  segment: ZoneSegment
+  formatBand: (value: number) => string
+  money: (value: number) => string
+  unit: string
+  t: (key: Parameters<ReturnType<typeof useI18n>['t']>[0], params?: Record<string, string | number>) => string
+  as?: 'div' | 'li'
+  className?: string
+  style?: CSSProperties
+}) {
+  return (
+    <Tag
+      className={['allowance-band-card', segment.tone, className].filter(Boolean).join(' ')}
+      style={style}
+    >
+      <span className="allowance-band-card-header">
+        <span className="allowance-band-card-label">
+          <span className="allowance-band-card-swatch" aria-hidden="true" />
+          {segment.label}
+        </span>
+        {segment.ratePerKwh != null && (
+          <span className="allowance-band-card-rate">
+            {money(segment.ratePerKwh)} / kWh
+          </span>
+        )}
+      </span>
+      <BandUsageCopy
+        segment={segment}
+        formatBand={formatBand}
+        unit={unit}
+        t={t}
+      />
+    </Tag>
+  )
 }
 
 function BandUsageCopy({
@@ -526,25 +571,16 @@ function ProfileChart({
 
         <div className="allowance-vbar-legend">
           {segments.map((segment, index) => (
-            <div
+            <BandDetailCard
               key={segment.key}
-              className={`allowance-vbar-legend-item ${segment.tone}`}
+              segment={segment}
+              formatBand={formatBand}
+              money={money}
+              unit={unit}
+              t={t}
+              className="allowance-vbar-legend-item"
               style={{ flex: `${displayFractions[index]} 1 0` }}
-            >
-              <span className="allowance-bar-identity">
-                <span className="allowance-bar-label">{segment.label}</span>
-                {segment.ratePerKwh != null && (
-                  <span className="allowance-bar-rate">{money(segment.ratePerKwh)} / kWh</span>
-                )}
-              </span>
-
-              <BandUsageCopy
-                segment={segment}
-                formatBand={formatBand}
-                unit={unit}
-                t={t}
-              />
-            </div>
+            />
           ))}
         </div>
 
@@ -810,25 +846,16 @@ function SeasonColumn({
             const total = segment.usedKwh + segment.unusedKwh
             if (total <= 0) return null
             return (
-              <li key={segment.key} className={`allowance-mixed-detail ${segment.tone}`}>
-                <span className="allowance-mixed-detail-header">
-                  <span className="allowance-mixed-detail-label">
-                    <span className="allowance-mixed-detail-swatch" aria-hidden="true" />
-                    {segment.label}
-                  </span>
-                  {segment.ratePerKwh != null && (
-                    <span className="allowance-mixed-detail-rate">
-                      {money(segment.ratePerKwh)} / kWh
-                    </span>
-                  )}
-                </span>
-                <BandUsageCopy
-                  segment={segment}
-                  formatBand={formatBand}
-                  unit={unit}
-                  t={t}
-                />
-              </li>
+              <BandDetailCard
+                key={segment.key}
+                as="li"
+                segment={segment}
+                formatBand={formatBand}
+                money={money}
+                unit={unit}
+                t={t}
+                className="allowance-mixed-detail"
+              />
             )
           })}
         </ul>
