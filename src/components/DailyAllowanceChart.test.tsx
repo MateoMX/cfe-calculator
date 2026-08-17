@@ -119,6 +119,8 @@ describe('DailyAllowanceChart mixed period', () => {
     expect(screen.getByRole('heading', { name: 'Standard' })).toBeInTheDocument()
     expect(document.querySelectorAll('.allowance-chart--mixed')).toHaveLength(1)
     expect(document.querySelectorAll('.allowance-mixed-column')).toHaveLength(2)
+    expect(document.querySelectorAll('.allowance-mixed-body')).toHaveLength(2)
+    expect(document.querySelectorAll('.allowance-mixed-bar-stage')).toHaveLength(2)
     expect(document.querySelectorAll('.allowance-mixed-details')).toHaveLength(2)
     expect(document.querySelectorAll('.allowance-mixed-detail').length).toBeGreaterThanOrEqual(4)
 

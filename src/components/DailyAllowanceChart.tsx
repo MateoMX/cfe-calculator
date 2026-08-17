@@ -186,6 +186,7 @@ function segmentScaleTarget(
 // blocks out of scale (pinned to the floor) so the text always fits.
 const MIN_SEGMENT_PX = 62
 const BASE_HEIGHT_PX = 272
+const MIXED_BAR_HEIGHT_PX = 248
 const MAX_VIEWPORT_RATIO = 0.7
 const MAX_FLOOR_PX = 400
 
@@ -686,122 +687,124 @@ function SeasonColumn({
         )}
       </div>
 
-      <div className="allowance-mixed-bar-stage" style={{ height: `${chartHeightPx}px` }}>
-        <div className="allowance-vbar-track">
-          <div className="allowance-vbar-zones">
-            {segments.map((segment, index) => {
-              const total = segment.usedKwh + segment.unusedKwh
-              if (total <= 0) return null
-              const usedPct = (segment.usedKwh / total) * 100
-              const unusedPct = 100 - usedPct
-              const rate =
-                segment.ratePerKwh != null
-                  ? t('allowance.rateSuffix', { rate: money(segment.ratePerKwh) })
-                  : ''
-              return (
-                <div
-                  key={segment.key}
-                  className={`allowance-vbar-zone ${segment.tone}`}
-                  style={{ flex: `${displayFractions[index]} 1 0` }}
-                  title={
-                    segment.unusedKwh > 0 && !segment.isExcess
-                      ? t('allowance.tooltipPartial', {
-                          label: segment.label,
-                          rate,
-                          used: formatBand(segment.usedKwh),
-                          total: formatBand(total),
-                          unit,
-                        })
-                      : t('allowance.tooltipFull', {
-                          label: segment.label,
-                          rate,
-                          used: formatBand(segment.usedKwh),
-                          unit,
-                        })
-                  }
-                >
-                  {segment.usedKwh > 0 && (
-                    <span className="allowance-vbar-used" style={{ height: `${usedPct}%` }} />
-                  )}
-                  {segment.unusedKwh > 0 && (
-                    <span className="allowance-vbar-unused" style={{ height: `${unusedPct}%` }} />
-                  )}
-                </div>
-              )
-            })}
-          </div>
+      <div className="allowance-mixed-body">
+        <div className="allowance-mixed-bar-stage" style={{ height: `${chartHeightPx}px` }}>
+          <div className="allowance-vbar-track">
+            <div className="allowance-vbar-zones">
+              {segments.map((segment, index) => {
+                const total = segment.usedKwh + segment.unusedKwh
+                if (total <= 0) return null
+                const usedPct = (segment.usedKwh / total) * 100
+                const unusedPct = 100 - usedPct
+                const rate =
+                  segment.ratePerKwh != null
+                    ? t('allowance.rateSuffix', { rate: money(segment.ratePerKwh) })
+                    : ''
+                return (
+                  <div
+                    key={segment.key}
+                    className={`allowance-vbar-zone ${segment.tone}`}
+                    style={{ flex: `${displayFractions[index]} 1 0` }}
+                    title={
+                      segment.unusedKwh > 0 && !segment.isExcess
+                        ? t('allowance.tooltipPartial', {
+                            label: segment.label,
+                            rate,
+                            used: formatBand(segment.usedKwh),
+                            total: formatBand(total),
+                            unit,
+                          })
+                        : t('allowance.tooltipFull', {
+                            label: segment.label,
+                            rate,
+                            used: formatBand(segment.usedKwh),
+                            unit,
+                          })
+                    }
+                  >
+                    {segment.usedKwh > 0 && (
+                      <span className="allowance-vbar-used" style={{ height: `${usedPct}%` }} />
+                    )}
+                    {segment.unusedKwh > 0 && (
+                      <span className="allowance-vbar-unused" style={{ height: `${unusedPct}%` }} />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
 
-          {dacMarkerPct != null && (
+            {dacMarkerPct != null && (
+              <span
+                className="allowance-marker allowance-marker--dac allowance-marker--mixed"
+                style={{ bottom: `${dacMarkerPct}%` }}
+                aria-hidden="true"
+              >
+                <span className="allowance-marker-triangle" />
+                <span className="allowance-marker-line" />
+              </span>
+            )}
             <span
-              className="allowance-marker allowance-marker--dac allowance-marker--mixed"
-              style={{ bottom: `${dacMarkerPct}%` }}
+              className={`allowance-marker allowance-marker--avg allowance-marker--mixed${
+                currentPaceAboveDacLimit ? ' allowance-marker--alert' : ''
+              }`}
+              style={{ bottom: `${usageMarkerPct}%` }}
               aria-hidden="true"
             >
               <span className="allowance-marker-triangle" />
               <span className="allowance-marker-line" />
             </span>
-          )}
-          <span
-            className={`allowance-marker allowance-marker--avg allowance-marker--mixed${
-              currentPaceAboveDacLimit ? ' allowance-marker--alert' : ''
-            }`}
-            style={{ bottom: `${usageMarkerPct}%` }}
-            aria-hidden="true"
-          >
-            <span className="allowance-marker-triangle" />
-            <span className="allowance-marker-line" />
-          </span>
+          </div>
         </div>
-      </div>
 
-      <ul className="allowance-mixed-details">
-        {segments.map((segment) => {
-          const total = segment.usedKwh + segment.unusedKwh
-          if (total <= 0) return null
-          const usedPct = Math.min(100, (segment.usedKwh / total) * 100)
-          const roundedUsedPct = Math.round(usedPct)
-          return (
-            <li key={segment.key} className={`allowance-mixed-detail ${segment.tone}`}>
-              <span className="allowance-mixed-detail-swatch" aria-hidden="true" />
-              <span className="allowance-mixed-detail-main">
-                <span className="allowance-mixed-detail-label">{segment.label}</span>
-                {segment.ratePerKwh != null && (
-                  <span className="allowance-mixed-detail-rate">
-                    {money(segment.ratePerKwh)} / kWh
+        <ul className="allowance-mixed-details">
+          {segments.map((segment) => {
+            const total = segment.usedKwh + segment.unusedKwh
+            if (total <= 0) return null
+            const usedPct = Math.min(100, (segment.usedKwh / total) * 100)
+            const roundedUsedPct = Math.round(usedPct)
+            return (
+              <li key={segment.key} className={`allowance-mixed-detail ${segment.tone}`}>
+                <span className="allowance-mixed-detail-swatch" aria-hidden="true" />
+                <span className="allowance-mixed-detail-main">
+                  <span className="allowance-mixed-detail-label">{segment.label}</span>
+                  {segment.ratePerKwh != null && (
+                    <span className="allowance-mixed-detail-rate">
+                      {money(segment.ratePerKwh)} / kWh
+                    </span>
+                  )}
+                </span>
+                <span className="allowance-mixed-detail-value">
+                  {segment.isExcess
+                    ? t('allowance.usedAmount', { used: formatBand(segment.usedKwh) })
+                    : t('allowance.usedOf', {
+                        used: formatBand(segment.usedKwh),
+                        total: formatBand(total),
+                      })}
+                  <small>kWh / {unit}</small>
+                </span>
+                {segment.isExcess ? (
+                  segment.usedKwh > 0 ? (
+                    <span className="allowance-mixed-detail-pct" aria-hidden="true" />
+                  ) : (
+                    <span className="allowance-mixed-detail-pct allowance-mixed-detail-pct--off">
+                      {t('allowance.legendExcessOff')}
+                    </span>
+                  )
+                ) : (
+                  <span className="allowance-mixed-detail-pct">
+                    <span
+                      className="allowance-usage-pie"
+                      style={{ '--usage-percent': `${usedPct}%` } as CSSProperties}
+                      aria-hidden="true"
+                    />
+                    <strong>{roundedUsedPct}%</strong>
                   </span>
                 )}
-              </span>
-              <span className="allowance-mixed-detail-value">
-                {segment.isExcess
-                  ? t('allowance.usedAmount', { used: formatBand(segment.usedKwh) })
-                  : t('allowance.usedOf', {
-                      used: formatBand(segment.usedKwh),
-                      total: formatBand(total),
-                    })}
-                <small>kWh / {unit}</small>
-              </span>
-              {segment.isExcess ? (
-                segment.usedKwh > 0 ? (
-                  <span className="allowance-mixed-detail-pct" aria-hidden="true" />
-                ) : (
-                  <span className="allowance-mixed-detail-pct allowance-mixed-detail-pct--off">
-                    {t('allowance.legendExcessOff')}
-                  </span>
-                )
-              ) : (
-                <span className="allowance-mixed-detail-pct">
-                  <span
-                    className="allowance-usage-pie"
-                    style={{ '--usage-percent': `${usedPct}%` } as CSSProperties}
-                    aria-hidden="true"
-                  />
-                  <strong>{roundedUsedPct}%</strong>
-                </span>
-              )}
-            </li>
-          )
-        })}
-      </ul>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
     </div>
   )
 }
@@ -829,7 +832,6 @@ function MixedSplitChart({
 }) {
   const unit = t(allowancePeriodUnitKey(displayScale))
   const money = (value: number) => formatMoneyRate(value, language)
-  const viewportHeight = useViewportHeight()
   const excessLabel = t('allowance.block.excedente')
 
   const summerDacUnits =
@@ -862,11 +864,9 @@ function MixedSplitChart({
   const summerScale = summerTotals.reduce((sum, total) => sum + total, 0)
   const standardScale = standardTotals.reduce((sum, total) => sum + total, 0)
 
-  // Charge details live below the bars, so bar height only needs a readable stack.
-  const chartHeightPx = Math.min(
-    Math.max(BASE_HEIGHT_PX, 300),
-    Math.max(MAX_FLOOR_PX, viewportHeight * MAX_VIEWPORT_RATIO),
-  )
+  // Slim bars sit beside the charge cards; keep a shared height so both seasons
+  // stay comparable without dominating the two-column layout.
+  const chartHeightPx = MIXED_BAR_HEIGHT_PX
   const summerFractions = computeDisplayFractions(summerTotals, 0)
   const standardFractions = computeDisplayFractions(standardTotals, 0)
 
