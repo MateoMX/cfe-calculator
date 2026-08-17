@@ -356,39 +356,6 @@ function mergeLines(lines: BillLine[]): BillLine[] {
   return [...map.values()]
 }
 
-/** Mixto excess: one unlabeled row when rates match; keep season labels when they differ. */
-function normalizeMixtoExcessLines(
-  lines: BillLine[],
-  tariffName: string,
-  language: Language,
-): BillLine[] {
-  const excess = lines.filter((line) => line.key === 'excedente')
-  if (excess.length === 0) return lines
-
-  const nonExcess = lines.filter((line) => line.key !== 'excedente')
-  const distinctRates = new Set(excess.map((line) => line.rate))
-
-  if (distinctRates.size === 1) {
-    const rate = excess[0]!.rate
-    const kwh = roundKwh(excess.reduce((sum, line) => sum + line.kwh, 0))
-    return [
-      ...nonExcess,
-      {
-        key: 'excedente',
-        label: translate(language, 'billing.lineLabel', {
-          tariff: tariffName,
-          block: blockLabel('excedente', language),
-        }),
-        kwh,
-        rate,
-        amount: roundMoney(kwh * rate),
-      },
-    ]
-  }
-
-  return [...nonExcess, ...excess]
-}
-
 export function estimateDomesticBill(
   input: CalculatorInput,
   projectedKwh: number,
@@ -474,8 +441,10 @@ export function estimateDomesticBill(
       }),
     )
   } else {
-    // Day-weighted mixto: attribute kWh by summer/non-summer day share and prorate
-    // each season's official monthly cupos by seasonDays / 30.
+    // Day-weighted mixto: attribute kWh by summer/non-summer day share, then bill
+    // each portion as a monthly fraction with that season's full official cupos
+    // (Manual: two monthly fractions). Do not shrink Básico/Intermedio by days/30,
+    // or leftover kWh is sent to Excedente while published monthly blocks look unused.
     const nonSummerDays = Math.max(0, periodDays - summerDays)
     const firstSeason = seasonResolution.firstSeason
     const secondSeason = seasonResolution.secondSeason!
@@ -483,8 +452,6 @@ export function estimateDomesticBill(
     const secondDays = secondSeason === 'verano' ? summerDays : nonSummerDays
     const firstKwh = periodDays > 0 ? billedKwh * (firstDays / periodDays) : 0
     const secondKwh = billedKwh - firstKwh
-    const firstFactor = firstDays / 30
-    const secondFactor = secondDays / 30
 
     const firstOffset = seasonResolution.transitionDays <= 30 ? 30 : 60
     const secondOffset = seasonResolution.transitionDays <= 30 ? 0 : 30
@@ -495,32 +462,28 @@ export function estimateDomesticBill(
         : rateLookupMonth(input.nextCutoffDate, secondOffset)
 
     seasonLabel = translate(language, 'billing.seasonMixto')
-    lines = normalizeMixtoExcessLines(
-      mergeLines([
-        ...billDomesticPortion(
-          code,
-          firstKwh,
-          firstSeason,
-          firstRef.month,
-          firstRef.year,
-          firstFactor,
-          language,
-          true,
-        ),
-        ...billDomesticPortion(
-          code,
-          secondKwh,
-          secondSeason,
-          secondRef.month,
-          secondRef.year,
-          secondFactor,
-          language,
-          true,
-        ),
-      ]),
-      tariff.name,
-      language,
-    )
+    lines = mergeLines([
+      ...billDomesticPortion(
+        code,
+        firstKwh,
+        firstSeason,
+        firstRef.month,
+        firstRef.year,
+        1,
+        language,
+        true,
+      ),
+      ...billDomesticPortion(
+        code,
+        secondKwh,
+        secondSeason,
+        secondRef.month,
+        secondRef.year,
+        1,
+        language,
+        true,
+      ),
+    ])
     assumptions.push(
       translate(language, 'billing.mixtoAssumption', {
         summerDays,
@@ -894,7 +857,8 @@ function seasonProfileLabel(
 
 /**
  * Allocate one season's attributed kWh through day-prorated official monthly cupos.
- * Band units are period totals for that season (allowance × seasonDays / 30).
+ * Band units are period totals for that season (allowance × seasonDays / 30) so
+ * the mixed chart can recover published daily (÷30) and monthly figures.
  */
 export function buildSeasonProratedAllowanceProfile(
   code: Exclude<DomesticTariffCode, 'DAC'>,

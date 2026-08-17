@@ -24,7 +24,7 @@ export const TARIFF_SNAPSHOT_META: TariffSnapshotMeta = {
     'Las cuotas 1B de julio 2026 (verano) se verificaron en el portal CFE: básico 1.010, intermedio 1.171, excedente 4.016.',
     'DAC: cuotas regionales oficiales mes a mes (enero–julio 2026) del portal CFE / oficios SHCP; julio = Oficio 349-B-1-069.',
     'El verano local es de seis meses consecutivos a partir del mes de inicio fijado para la localidad.',
-    'En periodos bimestrales mixtos, el consumo se divide en dos fracciones mensuales iguales (supuesto documentado; el Manual no detalla el reparto exacto del kWh agregado).',
+    'En periodos bimestrales mixtos, el consumo se reparte por días de verano y fuera de verano; cada fracción se cobra con los cupos mensuales oficiales de esa temporada (supuesto documentado; el Manual no detalla el reparto exacto del kWh agregado).',
   ],
 }
 

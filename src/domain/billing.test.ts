@@ -163,31 +163,31 @@ describe('bill estimate', () => {
     const bill = estimateDomesticBill(input, 300)
 
     expect(bill.seasonMode).toBe('mixto')
-    // 40 summer days / 20 non-summer → 200 / 100 kWh, cupos prorated by days/30.
+    // 40 summer days / 20 non-summer → 200 / 100 kWh, each billed with a full month of cupos.
     expect(bill.lines).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           key: 'basico',
           label: 'Tarifa 1B Básico (verano)',
-          kwh: 166.667,
+          kwh: 125,
           rate: 1.016,
         }),
         expect.objectContaining({
           key: 'intermedio',
           label: 'Tarifa 1B Intermedio (verano)',
-          kwh: 33.333,
+          kwh: 75,
           rate: 1.179,
         }),
         expect.objectContaining({
           key: 'basico',
           label: 'Tarifa 1B Básico (estándar)',
-          kwh: 50,
+          kwh: 75,
           rate: 1.14,
         }),
         expect.objectContaining({
           key: 'intermedio',
           label: 'Tarifa 1B Intermedio (estándar)',
-          kwh: 50,
+          kwh: 25,
           rate: 1.385,
         }),
       ]),
@@ -204,7 +204,7 @@ describe('bill estimate', () => {
     )
   })
 
-  it('shows a single unlabeled excess line when only one mixto season overflows', () => {
+  it('fills official monthly subsidized blocks before mixto excess', () => {
     const input = {
       ...createEmptyInput(),
       tariffCode: '1B' as const,
@@ -214,16 +214,35 @@ describe('bill estimate', () => {
       nextCutoffDate: '2026-10-20',
     }
 
-    // 360 kWh → 240 summer / 120 standard; only standard exceeds prorated cupos.
+    // 360 kWh → 240 summer / 120 standard; summer overflows the 225 monthly cupo.
     const bill = estimateDomesticBill(input, 360)
-    const excess = bill.lines.filter((line) => line.key === 'excedente')
-
-    expect(excess).toHaveLength(1)
-    expect(excess[0]).toMatchObject({
-      label: 'Tarifa 1B Excedente',
-      kwh: 3.333,
-      rate: 4.054,
-    })
+    expect(bill.lines).toEqual([
+      expect.objectContaining({
+        key: 'basico',
+        label: 'Tarifa 1B Básico (verano)',
+        kwh: 125,
+      }),
+      expect.objectContaining({
+        key: 'intermedio',
+        label: 'Tarifa 1B Intermedio (verano)',
+        kwh: 100,
+      }),
+      expect.objectContaining({
+        key: 'excedente',
+        label: 'Tarifa 1B Excedente (verano)',
+        kwh: 15,
+      }),
+      expect.objectContaining({
+        key: 'basico',
+        label: 'Tarifa 1B Básico (estándar)',
+        kwh: 75,
+      }),
+      expect.objectContaining({
+        key: 'intermedio',
+        label: 'Tarifa 1B Intermedio (estándar)',
+        kwh: 45,
+      }),
+    ])
   })
 
   it('splits mixto excess across summer and standard when rates differ', () => {
@@ -243,15 +262,44 @@ describe('bill estimate', () => {
     expect(excess).toEqual([
       expect.objectContaining({
         label: 'Tarifa 1B Excedente (verano)',
-        kwh: 100,
+        kwh: 175,
         rate: 4.041,
       }),
       expect.objectContaining({
         label: 'Tarifa 1B Excedente (estándar)',
-        kwh: 83.333,
+        kwh: 25,
         rate: 4.054,
       }),
     ])
+  })
+
+  it('fills 1B monthly Basic and Intermediate before Excess on a Sep–Oct mixed exit bill', () => {
+    const input = {
+      ...createEmptyInput(),
+      tariffCode: '1B' as const,
+      summerStartMonth: 4 as const,
+      billingCycle: 'bimestral' as const,
+      previousReading: 1000,
+      currentReading: 1150,
+      previousCutoffDate: '2026-09-01',
+      currentReadingDate: '2026-09-15',
+      nextCutoffDate: '2026-10-31',
+    }
+
+    const { estimate, issues } = estimateBill(input)
+    expect(issues).toHaveLength(0)
+    const bill = estimate!.bill
+    expect(bill.seasonMode).toBe('mixto')
+    expect(bill.billedKwh).toBe(643)
+    expect(bill.lines.map((line) => [line.label, line.kwh])).toEqual([
+      ['Tarifa 1B Básico (verano)', 125],
+      ['Tarifa 1B Intermedio (verano)', 100],
+      ['Tarifa 1B Excedente (verano)', 85.783],
+      ['Tarifa 1B Básico (estándar)', 75],
+      ['Tarifa 1B Intermedio (estándar)', 100],
+      ['Tarifa 1B Excedente (estándar)', 157.217],
+    ])
+    expect(bill.lines.reduce((sum, line) => sum + line.kwh, 0)).toBeCloseTo(643, 3)
   })
 
   it('uses October non-summer rates for a monthly October 20 exit bill', () => {

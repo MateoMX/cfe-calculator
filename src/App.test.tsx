@@ -256,6 +256,7 @@ describe('App', () => {
       name: /Cómo estimamos este periodo mixto/i,
     })
     expect(mixedInfo).toHaveTextContent(/repartimos el consumo proyectado en esa misma proporción/i)
+    expect(mixedInfo).toHaveTextContent(/cupos mensuales oficiales de Básico e Intermedio/i)
     expect(mixedInfo).toHaveTextContent(/reparto por días es una estimación/i)
     expect(mixedInfo).toHaveTextContent(/recibo de CFE prevalece/i)
   })

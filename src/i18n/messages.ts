@@ -255,7 +255,7 @@ const esMessages = {
   'result.minimumApplied': 'Se aplicó el consumo mínimo oficial del periodo.',
   'result.mixedInfoLabel': 'Cómo estimamos este periodo mixto',
   'result.mixedInfoDescription':
-    'Las fechas del periodo cruzan el inicio o el fin del verano y caen dentro de la regla oficial de facturación bimestral mixta. Contamos cuántos días del periodo son de verano y cuántos fuera de verano, y repartimos el consumo proyectado en esa misma proporción. Los cupos subsidiados de cada temporada se prorratean por días (cupo mensual × días de esa temporada ÷ 30) y cada fracción se cobra con las cuotas de su temporada. Los meses de precios se eligen según los días de referencia del Manual de facturación (0, 30 o 60 días antes del corte, según cuántos días hayan transcurrido desde el cambio de temporada).\n\nEl reparto por días es una estimación porque una sola lectura bimestral no indica en qué día se consumió cada kWh. El recibo de CFE prevalece.',
+    'Las fechas del periodo cruzan el inicio o el fin del verano y caen dentro de la regla oficial de facturación bimestral mixta. Contamos cuántos días del periodo son de verano y cuántos fuera de verano, y repartimos el consumo proyectado en esa misma proporción. Cada fracción se cobra como un mes: primero se llenan los cupos mensuales oficiales de Básico e Intermedio de esa temporada, y el resto es Excedente. Los meses de precios se eligen según los días de referencia del Manual de facturación (0, 30 o 60 días antes del corte, según cuántos días hayan transcurrido desde el cambio de temporada).\n\nEl reparto por días es una estimación porque una sola lectura bimestral no indica en qué día se consumió cada kWh. El recibo de CFE prevalece.',
   'result.assumptions': 'Supuestos',
   'result.warnings': 'Avisos',
   'result.sources': 'Fuentes',
@@ -434,7 +434,7 @@ const esMessages = {
   'billing.rateAssumption':
     'Cuotas del mes de {month} {year} ({offset} días antes del corte), conforme al Manual de facturación.',
   'billing.mixtoAssumption':
-    'Periodo bimestral mixto con {summerDays} días de verano y {nonSummerDays} fuera de verano: el consumo se reparte por días ({summerKwh} kWh en verano y {nonSummerKwh} kWh fuera). Los cupos de cada temporada se prorratean por días (÷ 30); CFE no publica la fórmula exacta del reparto.',
+    'Periodo bimestral mixto con {summerDays} días de verano y {nonSummerDays} fuera de verano: el consumo se reparte por días ({summerKwh} kWh en verano y {nonSummerKwh} kWh fuera). Cada fracción usa los cupos mensuales oficiales de Básico e Intermedio de su temporada; el resto es Excedente. CFE no publica la fórmula exacta del reparto.',
   'billing.mixtoFractions':
     'Primera fracción: {firstSeason} ({firstDays} días) con cuotas de {firstMonth}; segunda fracción: {secondSeason} ({secondDays} días) con cuotas de {secondMonth}.',
   'billing.seasonWordVerano': 'verano',
@@ -751,7 +751,7 @@ const enMessages: Record<MessageKey, string> = {
   'result.minimumApplied': 'The official minimum consumption for the period was applied.',
   'result.mixedInfoLabel': 'How we estimate this mixed period',
   'result.mixedInfoDescription':
-    'The billing dates cross the start or end of summer and fall under the official mixed-bimonthly billing rule. We count how many days of the period are summer versus non-summer and allocate projected consumption in that same proportion. Each season’s subsidised allowances are prorated by days (monthly allowance × season days ÷ 30), and each portion is billed at that season’s rates. Pricing months follow the Billing Manual reference dates (0, 30, or 60 days before cutoff, depending on how many days have elapsed since the season changed).\n\nThe day-weighted split is an estimate because one bimonthly meter reading does not show which day each kWh was used. The official CFE bill prevails.',
+    'The billing dates cross the start or end of summer and fall under the official mixed-bimonthly billing rule. We count how many days of the period are summer versus non-summer and allocate projected consumption in that same proportion. Each portion is billed as a month: that season’s official monthly Basic and Intermediate allowances are filled first, and the rest is Excess. Pricing months follow the Billing Manual reference dates (0, 30, or 60 days before cutoff, depending on how many days have elapsed since the season changed).\n\nThe day-weighted split is an estimate because one bimonthly meter reading does not show which day each kWh was used. The official CFE bill prevails.',
   'result.assumptions': 'Assumptions',
   'result.warnings': 'Notices',
   'result.sources': 'Sources',
@@ -926,7 +926,7 @@ const enMessages: Record<MessageKey, string> = {
   'billing.rateAssumption':
     'Rates for {month} {year} ({offset} days before cutoff), per the billing manual.',
   'billing.mixtoAssumption':
-    'Mixed bimonthly period with {summerDays} summer days and {nonSummerDays} non-summer days: consumption is split by days ({summerKwh} kWh in summer and {nonSummerKwh} kWh non-summer). Each season’s allowances are prorated by days (÷ 30); CFE does not publish the exact allocation formula.',
+    'Mixed bimonthly period with {summerDays} summer days and {nonSummerDays} non-summer days: consumption is split by days ({summerKwh} kWh in summer and {nonSummerKwh} kWh non-summer). Each portion uses that season’s official monthly Basic and Intermediate allowances; the rest is Excess. CFE does not publish the exact allocation formula.',
   'billing.mixtoFractions':
     'First portion: {firstSeason} ({firstDays} days) with rates from {firstMonth}; second portion: {secondSeason} ({secondDays} days) with rates from {secondMonth}.',
   'billing.seasonWordVerano': 'summer',
