@@ -68,7 +68,7 @@ function maxSubsidisedKwhInSummer(
 interface ZoneSegment {
   key: string
   label: string
-  /** Segment sizes in chart units (monthly kWh, or period-total kWh for mixto). */
+  /** Segment sizes in monthly kWh (mixto split bars convert period totals first). */
   usedKwh: number
   unusedKwh: number
   tone: string
@@ -178,6 +178,30 @@ function segmentScaleTarget(
     usageKwh,
     dacLimitInChartUnits != null ? dacLimitInChartUnits * 1.12 : 0,
   )
+}
+
+/** Convert mixto period-total kWh into the monthly domain both split bars share. */
+function mixtoPeriodKwhToMonthly(periodKwh: number, seasonDays: number): number {
+  return scalePeriodAllowanceKwh(periodKwh, seasonDays, 'monthly')
+}
+
+function mixtoProfileToMonthly(
+  profile: DailyAllowanceProfile,
+  seasonDays: number,
+): DailyAllowanceProfile {
+  const toMonthly = (value: number) => mixtoPeriodKwhToMonthly(value, seasonDays)
+  return {
+    ...profile,
+    bands: profile.bands.map((band) => ({
+      ...band,
+      bandMonthlyKwh: toMonthly(band.bandMonthlyKwh),
+      cumulativeMonthlyKwh: toMonthly(band.cumulativeMonthlyKwh),
+      usedKwh: band.usedKwh != null ? toMonthly(band.usedKwh) : undefined,
+    })),
+    subsidizedCeilingMonthlyKwh: toMonthly(profile.subsidizedCeilingMonthlyKwh),
+    excessUsedKwh:
+      profile.excessUsedKwh != null ? toMonthly(profile.excessUsedKwh) : undefined,
+  }
 }
 
 // Each legend row needs a floor of vertical space so its label/rate/value never
@@ -833,28 +857,36 @@ function MixedSplitChart({
   const unit = t(allowancePeriodUnitKey(displayScale))
   const money = (value: number) => formatMoneyRate(value, language)
   const excessLabel = t('allowance.block.excedente')
+  const formatBand = (value: number) =>
+    formatKwh(scaleMonthlyAllowanceKwh(value, displayScale), language)
 
-  const summerDacUnits =
-    dacLimitKwhMonth == null ? null : (dacLimitKwhMonth * mixedPeriod.summerDays) / 30
-  const standardDacUnits =
-    dacLimitKwhMonth == null ? null : (dacLimitKwhMonth * mixedPeriod.nonSummerDays) / 30
+  const summerMonthly = mixtoProfileToMonthly(summerProfile, mixedPeriod.summerDays)
+  const standardMonthly = mixtoProfileToMonthly(standardProfile, mixedPeriod.nonSummerDays)
+  const summerUsageMonthly = mixtoPeriodKwhToMonthly(
+    mixedPeriod.summerKwh,
+    mixedPeriod.summerDays,
+  )
+  const standardUsageMonthly = mixtoPeriodKwhToMonthly(
+    mixedPeriod.nonSummerKwh,
+    mixedPeriod.nonSummerDays,
+  )
 
   const sharedScale = Math.max(
-    segmentScaleTarget(summerProfile, mixedPeriod.summerKwh, summerDacUnits),
-    segmentScaleTarget(standardProfile, mixedPeriod.nonSummerKwh, standardDacUnits),
+    segmentScaleTarget(summerMonthly, summerUsageMonthly, dacLimitKwhMonth),
+    segmentScaleTarget(standardMonthly, standardUsageMonthly, dacLimitKwhMonth),
   )
 
   const summerSegments = buildSegmentsForUsage(
-    summerProfile,
-    mixedPeriod.summerKwh,
-    summerDacUnits,
+    summerMonthly,
+    summerUsageMonthly,
+    dacLimitKwhMonth,
     excessLabel,
     sharedScale,
   )
   const standardSegments = buildSegmentsForUsage(
-    standardProfile,
-    mixedPeriod.nonSummerKwh,
-    standardDacUnits,
+    standardMonthly,
+    standardUsageMonthly,
+    dacLimitKwhMonth,
     excessLabel,
     sharedScale,
   )
@@ -887,16 +919,6 @@ function MixedSplitChart({
         )
       : null
 
-  const formatSummerBand = (value: number) =>
-    formatKwh(
-      scalePeriodAllowanceKwh(value, Math.max(1, mixedPeriod.summerDays), displayScale),
-      language,
-    )
-  const formatStandardBand = (value: number) =>
-    formatKwh(
-      scalePeriodAllowanceKwh(value, Math.max(1, mixedPeriod.nonSummerDays), displayScale),
-      language,
-    )
   const formatUsage = (dailyValue: number) =>
     formatKwh(scaleDailyUsageKwh(dailyValue, displayScale), language)
 
@@ -907,28 +929,22 @@ function MixedSplitChart({
 
   const summerMarkerPct =
     summerScale > 0
-      ? Math.min(
-          100,
-          mapValueToFraction(mixedPeriod.summerKwh, summerTotals, summerFractions) * 100,
-        )
+      ? Math.min(100, mapValueToFraction(summerUsageMonthly, summerTotals, summerFractions) * 100)
       : 0
   const standardMarkerPct =
     standardScale > 0
       ? Math.min(
           100,
-          mapValueToFraction(mixedPeriod.nonSummerKwh, standardTotals, standardFractions) * 100,
+          mapValueToFraction(standardUsageMonthly, standardTotals, standardFractions) * 100,
         )
       : 0
   const summerDacPct =
-    summerDacUnits != null && summerScale > 0
-      ? Math.min(100, mapValueToFraction(summerDacUnits, summerTotals, summerFractions) * 100)
+    dacLimitKwhMonth != null && summerScale > 0
+      ? Math.min(100, mapValueToFraction(dacLimitKwhMonth, summerTotals, summerFractions) * 100)
       : null
   const standardDacPct =
-    standardDacUnits != null && standardScale > 0
-      ? Math.min(
-          100,
-          mapValueToFraction(standardDacUnits, standardTotals, standardFractions) * 100,
-        )
+    dacLimitKwhMonth != null && standardScale > 0
+      ? Math.min(100, mapValueToFraction(dacLimitKwhMonth, standardTotals, standardFractions) * 100)
       : null
 
   const ariaDac =
@@ -955,8 +971,8 @@ function MixedSplitChart({
           unit,
           summerRange: summerRangeLabel ?? t('allowance.seasonSummer'),
           standardRange: standardRangeLabel ?? t('allowance.seasonStandard'),
-          summerZones: describeZones(summerSegments, formatSummerBand, money, t),
-          standardZones: describeZones(standardSegments, formatStandardBand, money, t),
+          summerZones: describeZones(summerSegments, formatBand, money, t),
+          standardZones: describeZones(standardSegments, formatBand, money, t),
           dac: ariaDac,
         })}
       >
@@ -967,7 +983,7 @@ function MixedSplitChart({
             segments={summerSegments}
             displayFractions={summerFractions}
             chartHeightPx={chartHeightPx}
-            formatBand={formatSummerBand}
+            formatBand={formatBand}
             money={money}
             unit={unit}
             usageMarkerPct={summerMarkerPct}
@@ -981,7 +997,7 @@ function MixedSplitChart({
             segments={standardSegments}
             displayFractions={standardFractions}
             chartHeightPx={chartHeightPx}
-            formatBand={formatStandardBand}
+            formatBand={formatBand}
             money={money}
             unit={unit}
             usageMarkerPct={standardMarkerPct}
