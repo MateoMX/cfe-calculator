@@ -124,6 +124,14 @@ describe('DailyAllowanceChart mixed period', () => {
     expect(document.querySelectorAll('.allowance-mixed-details')).toHaveLength(2)
     expect(document.querySelectorAll('.allowance-mixed-detail').length).toBeGreaterThanOrEqual(4)
 
+    const firstColumnLabels = [
+      ...document.querySelectorAll(
+        '.allowance-mixed-column:first-child .allowance-mixed-detail-label',
+      ),
+    ].map((node) => node.textContent)
+    expect(firstColumnLabels[0]).toMatch(/Excess/i)
+    expect(firstColumnLabels.at(-1)).toMatch(/Basic/i)
+
     const chart = screen.getByRole('img', { name: /Mixed period\. Summer/i })
     expect(chart.getAttribute('aria-label')).toMatch(/Summer \(/i)
     expect(chart.getAttribute('aria-label')).toMatch(/Standard \(/i)

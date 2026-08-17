@@ -781,7 +781,7 @@ function SeasonColumn({
         </div>
 
         <ul className="allowance-mixed-details">
-          {segments.map((segment) => {
+          {[...segments].toReversed().map((segment) => {
             const total = segment.usedKwh + segment.unusedKwh
             if (total <= 0) return null
             const usedPct = Math.min(100, (segment.usedKwh / total) * 100)
