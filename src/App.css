@@ -1054,14 +1054,16 @@
 .allowance-mixed-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 1.1rem;
-  align-items: start;
+  align-items: stretch;
   min-width: 0;
 }
 
 .allowance-mixed-column {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 2;
   gap: 0.55rem;
   min-width: 0;
 }
@@ -1090,15 +1092,17 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0.7rem 0.75rem;
-  align-items: start;
+  align-items: stretch;
   min-width: 0;
+  min-height: 0;
 }
 
 .allowance-mixed-bar-stage {
   position: relative;
   width: calc(var(--allowance-mixed-marker-gutter) + var(--allowance-mixed-bar-width));
   margin: 0;
-  flex: 0 0 auto;
+  min-height: 0;
+  height: 100%;
 }
 
 .allowance-mixed-bar-stage .allowance-vbar-track {
@@ -1128,12 +1132,15 @@
 }
 
 .allowance-mixed-details {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
   margin: 0;
   padding: 0;
   list-style: none;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
 }
 
 .allowance-mixed-detail {
@@ -1145,6 +1152,7 @@
   column-gap: 0.5rem;
   row-gap: 0.15rem;
   align-items: center;
+  flex: 1 1 auto;
   padding: 0.48rem 0.55rem;
   border: 1px solid color-mix(in srgb, var(--border, #d5dde7) 80%, transparent);
   border-radius: 0.55rem;
@@ -1219,7 +1227,14 @@
 @media (max-width: 720px) {
   .allowance-mixed-columns {
     grid-template-columns: 1fr;
+    grid-template-rows: none;
     gap: 1.15rem;
+  }
+
+  .allowance-mixed-column {
+    display: flex;
+    flex-direction: column;
+    grid-row: auto;
   }
 
   .allowance-chart--mixed {
@@ -1228,6 +1243,7 @@
 
   .allowance-mixed-body {
     gap: 0.65rem 0.8rem;
+    flex: 1 1 auto;
   }
 }
 
