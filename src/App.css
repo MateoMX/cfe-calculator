@@ -1400,6 +1400,9 @@
    and a legend below the chart explains each marker's colour. */
 .allowance-marker {
   --marker-color: var(--accent);
+  --marker-outline:
+    drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff)
+    drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff);
   position: absolute;
   left: 0;
   width: calc(var(--allowance-marker-gutter) + var(--allowance-col-gap) + var(--allowance-bar-width));
@@ -1432,7 +1435,7 @@
   border-bottom: 5px solid transparent;
   border-left: 8px solid var(--marker-color);
   transform: translateY(-50%);
-  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.9));
+  filter: var(--marker-outline);
 }
 
 .allowance-marker-line {
@@ -1442,7 +1445,7 @@
   top: 0;
   height: 0;
   border-top: 1.5px dashed color-mix(in srgb, var(--marker-color) 65%, #ffffff);
-  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.9));
+  filter: var(--marker-outline);
 }
 
 /* Legend explaining the marker triangles. */
@@ -1457,6 +1460,9 @@
 
 .allowance-marker-legend-item {
   --marker-color: var(--accent);
+  --marker-outline:
+    drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff)
+    drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff);
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -1489,6 +1495,7 @@
   border-top: 5px solid transparent;
   border-bottom: 5px solid transparent;
   border-left: 8px solid var(--marker-color);
+  filter: var(--marker-outline);
 }
 
 @media (max-width: 420px) {
