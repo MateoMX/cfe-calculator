@@ -36,7 +36,7 @@ describe('tariff snapshot registry', () => {
 
 describe('tariff snapshot integrity', () => {
   it('has metadata, official links, and all domestic tariffs', () => {
-    expect(TARIFF_SNAPSHOT_META.asOf).toBe('2026-07-16')
+    expect(TARIFF_SNAPSHOT_META.asOf).toBe('2026-08-17')
     expect(TARIFF_SNAPSHOT_META.year).toBe(2026)
     expect(TARIFF_SNAPSHOT_META.sourceUrl).toMatch(/^https:\/\//)
     expect(TARIFF_SNAPSHOT_META.agreementsUrl).toMatch(/^https:\/\//)
@@ -45,13 +45,18 @@ describe('tariff snapshot integrity', () => {
     expect(Object.keys(DOMESTIC_TARIFFS)).toEqual([...DOMESTIC_CODES])
   })
 
-  it('matches verified July 2026 1B summer prices from CFE portal', () => {
-    const julySummer = DOMESTIC_TARIFFS['1B'].monthlyRates.find(
-      (rate) => rate.month === 7 && rate.season === 'verano',
+  it('matches verified August 2026 1B summer and Tarifa 1 prices from CFE portal', () => {
+    const augustSummer = DOMESTIC_TARIFFS['1B'].monthlyRates.find(
+      (rate) => rate.month === 8 && rate.season === 'verano',
     )
-    expect(julySummer?.prices.basico).toBe(1.01)
-    expect(julySummer?.prices.intermedio).toBe(1.171)
-    expect(julySummer?.prices.excedente).toBe(4.016)
+    expect(augustSummer?.prices.basico).toBe(1.013)
+    expect(augustSummer?.prices.intermedio).toBe(1.175)
+    expect(augustSummer?.prices.excedente).toBe(4.028)
+
+    const tariff1August = DOMESTIC_TARIFFS['1'].monthlyRates.find((rate) => rate.month === 8)
+    expect(tariff1August?.prices.basico).toBe(1.132)
+    expect(tariff1August?.prices.intermedio).toBe(1.377)
+    expect(tariff1August?.prices.excedente).toBe(4.028)
   })
 
   it('keeps official monthly block allowances and DAC thresholds for every tariff', () => {
@@ -114,13 +119,16 @@ describe('tariff snapshot integrity', () => {
     }
   })
 
-  it('includes official monthly DAC schedules and exposes July as the latest published rates', () => {
-    expect(DAC_MONTHLY_SCHEDULES.map((schedule) => schedule.month)).toEqual([1, 2, 3, 4, 5, 6, 7])
-    expect(getTariffSnapshot(2026)?.dacMonthlySchedules).toHaveLength(7)
+  it('includes official monthly DAC schedules and exposes August as the latest published rates', () => {
+    expect(DAC_MONTHLY_SCHEDULES.map((schedule) => schedule.month)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8,
+    ])
+    expect(getTariffSnapshot(2026)?.dacMonthlySchedules).toHaveLength(8)
 
     const january = DAC_MONTHLY_SCHEDULES.find((schedule) => schedule.month === 1)
     const may = DAC_MONTHLY_SCHEDULES.find((schedule) => schedule.month === 5)
     const july = DAC_MONTHLY_SCHEDULES.find((schedule) => schedule.month === 7)
+    const august = DAC_MONTHLY_SCHEDULES.find((schedule) => schedule.month === 8)
 
     expect(january?.regions.find((region) => region.regionId === 'central')).toMatchObject({
       fixedCharge: 142.41,
@@ -135,16 +143,20 @@ describe('tariff snapshot integrity', () => {
       fixedCharge: 144.95,
       energySummer: 6.713,
     })
+    expect(august?.regions.find((region) => region.regionId === 'central')).toMatchObject({
+      fixedCharge: 145.04,
+      energySummer: 6.63,
+    })
 
-    expect(DAC_REGIONS).toEqual(july?.regions)
+    expect(DAC_REGIONS).toEqual(august?.regions)
     expect(DAC_REGIONS).toHaveLength(6)
     expect(new Set(DAC_REGIONS.map((region) => region.regionId)).size).toBe(6)
     expect(DAC_REGIONS.find((region) => region.regionId === 'baja-california')?.energyNonSummer).toBe(
-      5.606,
+      5.536,
     )
     expect(
       DAC_REGIONS.find((region) => region.regionId === 'baja-california-sur')?.energyNonSummer,
-    ).toBe(5.606)
+    ).toBe(5.536)
     expect(DAC_REGIONS.find((region) => region.regionId === 'central')?.energyNonSummer).toBeNull()
   })
 })

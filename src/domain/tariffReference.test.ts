@@ -44,24 +44,25 @@ describe('tariffReference helpers', () => {
     expect(matrix[0]?.rates.basico).toBeGreaterThan(0)
     expect(getDomesticTariffCodes(2026)).toEqual(['1', '1A', '1B', '1C', '1D', '1E', '1F'])
     expect(getSnapshotMeta(2026).year).toBe(2026)
-    expect(getSnapshotMeta(2026).asOf).toBe('2026-07-16')
+    expect(getSnapshotMeta(2026).asOf).toBe('2026-08-17')
     expect(DAC_REGIONS).toHaveLength(6)
   })
 
   it('resolves published DAC months and falls back to the latest month when needed', () => {
-    expect(getAvailableDacMonths(2026)).toEqual([1, 2, 3, 4, 5, 6, 7])
-    expect(resolveDefaultDacMonth(2026)).toBe(7)
+    expect(getAvailableDacMonths(2026)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(resolveDefaultDacMonth(2026)).toBe(8)
     expect(getDacRegion('central', 2026, 1)?.energySummer).toBe(6.653)
     expect(getDacRegion('central', 2026, 7)?.energySummer).toBe(6.713)
-    expect(getDacRegion('baja-california', 2026, 7)?.energyNonSummer).toBe(5.606)
-    // Unpublished month (August) falls back to July.
-    expect(getDacRegions(2026, 8)).toEqual(getDacRegions(2026, 7))
+    expect(getDacRegion('central', 2026, 8)?.energySummer).toBe(6.63)
+    expect(getDacRegion('baja-california', 2026, 8)?.energyNonSummer).toBe(5.536)
+    // Unpublished month (September) falls back to August.
+    expect(getDacRegions(2026, 9)).toEqual(getDacRegions(2026, 8))
     expect(getDacRegions(2026)).toEqual(DAC_REGIONS)
   })
 
   it('derives overall last-check date and registered coverage range', () => {
     expect(getTariffDataStatus([2026])).toEqual({
-      lastCheckedAsOf: '2026-07-16',
+      lastCheckedAsOf: '2026-08-17',
       rangeStartISO: '2026-01-01',
       rangeEndISO: '2026-12-31',
     })
@@ -69,9 +70,9 @@ describe('tariffReference helpers', () => {
 
   it('derives the coverage range from published DAC months', () => {
     expect(getDacTariffDataStatus([2026])).toEqual({
-      lastCheckedAsOf: '2026-07-16',
+      lastCheckedAsOf: '2026-08-17',
       rangeStartISO: '2026-01-01',
-      rangeEndISO: '2026-07-31',
+      rangeEndISO: '2026-08-31',
     })
   })
 })
