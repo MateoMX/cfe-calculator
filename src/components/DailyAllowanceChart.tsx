@@ -811,9 +811,11 @@ function SeasonColumn({
             if (total <= 0) return null
             return (
               <li key={segment.key} className={`allowance-mixed-detail ${segment.tone}`}>
-                <span className="allowance-mixed-detail-swatch" aria-hidden="true" />
                 <span className="allowance-mixed-detail-header">
-                  <span className="allowance-mixed-detail-label">{segment.label}</span>
+                  <span className="allowance-mixed-detail-label">
+                    <span className="allowance-mixed-detail-swatch" aria-hidden="true" />
+                    {segment.label}
+                  </span>
                   {segment.ratePerKwh != null && (
                     <span className="allowance-mixed-detail-rate">
                       {money(segment.ratePerKwh)} / kWh
