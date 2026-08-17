@@ -162,6 +162,10 @@ describe('DailyAllowanceChart mixed period', () => {
     expect((usageMarkers[0] as HTMLElement).style.bottom).toBe(
       (usageMarkers[1] as HTMLElement).style.bottom,
     )
+
+    document.querySelectorAll('.allowance-mixed-bar-stage').forEach((stage) => {
+      expect((stage as HTMLElement).style.height).toBe('')
+    })
   })
 
   it('keeps the mixed split visible when the display scale changes', async () => {

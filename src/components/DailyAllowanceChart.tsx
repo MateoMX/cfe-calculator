@@ -210,7 +210,6 @@ function mixtoProfileToMonthly(
 // blocks out of scale (pinned to the floor) so the text always fits.
 const MIN_SEGMENT_PX = 62
 const BASE_HEIGHT_PX = 272
-const MIXED_BAR_HEIGHT_PX = 248
 const MAX_VIEWPORT_RATIO = 0.7
 const MAX_FLOOR_PX = 400
 
@@ -680,7 +679,6 @@ function SeasonColumn({
   rangeLabel,
   segments,
   displayFractions,
-  chartHeightPx,
   formatBand,
   money,
   unit,
@@ -693,7 +691,6 @@ function SeasonColumn({
   rangeLabel: string | null
   segments: ZoneSegment[]
   displayFractions: number[]
-  chartHeightPx: number
   formatBand: (value: number) => string
   money: (value: number) => string
   unit: string
@@ -712,7 +709,7 @@ function SeasonColumn({
       </div>
 
       <div className="allowance-mixed-body">
-        <div className="allowance-mixed-bar-stage" style={{ height: `${chartHeightPx}px` }}>
+        <div className="allowance-mixed-bar-stage">
           <div className="allowance-vbar-track">
             <div className="allowance-vbar-zones">
               {segments.map((segment, index) => {
@@ -896,9 +893,6 @@ function MixedSplitChart({
   const summerScale = summerTotals.reduce((sum, total) => sum + total, 0)
   const standardScale = standardTotals.reduce((sum, total) => sum + total, 0)
 
-  // Slim bars sit beside the charge cards; keep a shared height so both seasons
-  // stay comparable without dominating the two-column layout.
-  const chartHeightPx = MIXED_BAR_HEIGHT_PX
   const summerFractions = computeDisplayFractions(summerTotals, 0)
   const standardFractions = computeDisplayFractions(standardTotals, 0)
 
@@ -982,7 +976,6 @@ function MixedSplitChart({
             rangeLabel={summerRangeLabel}
             segments={summerSegments}
             displayFractions={summerFractions}
-            chartHeightPx={chartHeightPx}
             formatBand={formatBand}
             money={money}
             unit={unit}
@@ -996,7 +989,6 @@ function MixedSplitChart({
             rangeLabel={standardRangeLabel}
             segments={standardSegments}
             displayFractions={standardFractions}
-            chartHeightPx={chartHeightPx}
             formatBand={formatBand}
             money={money}
             unit={unit}
