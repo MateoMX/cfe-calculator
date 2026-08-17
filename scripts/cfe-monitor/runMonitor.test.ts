@@ -35,7 +35,7 @@ describe('runMonitor', () => {
       outputDir,
       fetchImpl: mockFetch({
         AcuerdosCasa: 'agreements-healthy.html',
-        TarifaDAC: 'dac-july.html',
+        TarifaDAC: 'dac-august.html',
         Tarifa1B: 'tarifa1b.html',
         Tarifa1: 'tarifa1.html',
       }),
@@ -46,14 +46,14 @@ describe('runMonitor', () => {
     expect(saved.result).toBe('no_changes')
   })
 
-  it('writes rates_found when August DAC is ahead of the repo', async () => {
+  it('writes rates_found when September DAC is ahead of the repo', async () => {
     const outputDir = await mkdtemp(path.join(os.tmpdir(), 'cfe-monitor-'))
     tempDirs.push(outputDir)
     const report = await runMonitor({
       outputDir,
       fetchImpl: mockFetch({
-        AcuerdosCasa: 'agreements-august-dac.html',
-        TarifaDAC: 'dac-august.html',
+        AcuerdosCasa: 'agreements-september-dac.html',
+        TarifaDAC: 'dac-september.html',
         Tarifa1B: 'tarifa1b.html',
         Tarifa1: 'tarifa1.html',
       }),
