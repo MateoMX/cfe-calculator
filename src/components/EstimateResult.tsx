@@ -1,22 +1,12 @@
 import { forwardRef } from 'react'
-import { TARIFF_SNAPSHOT_META } from '../data/tariffs-2026'
-import { formatDisplayDate } from '../domain/dates'
+import { TARIFF_SNAPSHOT_META } from '../data/tariffs'
 import type { DacRisk, FullEstimate } from '../domain/types'
+import { formatKwh, formatMoney, useI18n } from '../i18n'
 import { DailyAllowanceChart } from './DailyAllowanceChart'
+import { InfoPopover } from './InfoPopover'
 
 interface Props {
   estimate: FullEstimate
-}
-
-const DAC_OFFICIAL_URL =
-  'https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Tarifas/TarifaDAC.aspx'
-
-function money(value: number): string {
-  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value)
-}
-
-function kwh(value: number): string {
-  return new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }).format(value)
 }
 
 function dacPanelTone(status: DacRisk['status']): string {
@@ -26,39 +16,56 @@ function dacPanelTone(status: DacRisk['status']): string {
 }
 
 function DacRiskPanel({ dacRisk }: { dacRisk: DacRisk }) {
+  const { language, t } = useI18n()
+
   return (
     <section className={`dac-risk-panel ${dacPanelTone(dacRisk.status)}`} aria-live="polite">
-      <h3>Riesgo DAC</h3>
+      <h3>{t('result.dacTitle')}</h3>
       <p className="dac-risk-summary">{dacRisk.message}</p>
 
       {dacRisk.status !== 'already_dac' && (
         <div className="dac-risk-stats">
           <div>
-            <span>Límite de alto consumo</span>
-            <strong>{dacRisk.limitKwhMonth} kWh/mes</strong>
+            <span>{t('result.dacLimit')}</span>
+            <strong>{t('result.dacLimitValue', { limit: dacRisk.limitKwhMonth })}</strong>
           </div>
           <div>
-            <span>Historial capturado</span>
+            <span>{t('result.dacHistoryCaptured')}</span>
             <strong>
-              {dacRisk.providedHistorySlots} / {dacRisk.requiredHistorySlots} periodos
+              {t('result.dacHistoryValue', {
+                provided: dacRisk.providedHistorySlots,
+                required: dacRisk.requiredHistorySlots,
+              })}
             </strong>
           </div>
           {dacRisk.averageMonthlyKwh != null && (
             <div>
-              <span>Promedio 12 meses</span>
-              <strong>{kwh(dacRisk.averageMonthlyKwh)} kWh/mes</strong>
+              <span>{t('result.dacAvg12')}</span>
+              <strong>
+                {t('result.dacAvgValue', {
+                  kwh: formatKwh(dacRisk.averageMonthlyKwh, language),
+                })}
+              </strong>
             </div>
           )}
           {dacRisk.currentMonthlyPaceKwh != null && (
             <div>
-              <span>Uso mensual proyectado con tu ritmo actual</span>
-              <strong>{kwh(dacRisk.currentMonthlyPaceKwh)} kWh/mes</strong>
+              <span>{t('result.dacCurrentPace')}</span>
+              <strong>
+                {t('result.dacAvgValue', {
+                  kwh: formatKwh(dacRisk.currentMonthlyPaceKwh, language),
+                })}
+              </strong>
             </div>
           )}
           {dacRisk.projectedNextAverageMonthlyKwh != null && (
             <div>
-              <span>Promedio estimado del siguiente ciclo</span>
-              <strong>{kwh(dacRisk.projectedNextAverageMonthlyKwh)} kWh/mes</strong>
+              <span>{t('result.dacNextAvg')}</span>
+              <strong>
+                {t('result.dacAvgValue', {
+                  kwh: formatKwh(dacRisk.projectedNextAverageMonthlyKwh, language),
+                })}
+              </strong>
             </div>
           )}
         </div>
@@ -69,11 +76,20 @@ function DacRiskPanel({ dacRisk }: { dacRisk: DacRisk }) {
           <li key={item}>{item}</li>
         ))}
         <li>
-          Consulta la definición oficial del Consumo Mensual Promedio y los límites en la{' '}
-          <a href={DAC_OFFICIAL_URL} target="_blank" rel="noreferrer">
-            tarifa DAC de CFE
-          </a>
-          .
+          {(() => {
+            const [before = '', after = ''] = t('result.dacOfficialLink', {
+              link: '___',
+            }).split('___')
+            return (
+              <>
+                {before}
+                <a href={TARIFF_SNAPSHOT_META.dacUrl} target="_blank" rel="noreferrer">
+                  {t('result.dacOfficialLinkLabel')}
+                </a>
+                {after}
+              </>
+            )
+          })()}
         </li>
       </ul>
     </section>
@@ -84,16 +100,15 @@ export const EstimateResult = forwardRef<HTMLElement, Props>(function EstimateRe
   { estimate },
   ref,
 ) {
+  const { language, t } = useI18n()
   const { bill, projection, narrative, dacRisk } = estimate
+  const money = (value: number) => formatMoney(value, language)
+  const kwh = (value: number) => formatKwh(value, language)
 
   return (
     <section ref={ref} className="card result" aria-live="polite">
       <header className="card-header">
-        <h2>Estimación del recibo</h2>
-        <p>
-          Última actualización: {formatDisplayDate(estimate.dataAsOf)}. Las tarifas son correctas a
-          esta fecha. Esto es una estimación; el aviso-recibo de CFE es la fuente oficial.
-        </p>
+        <h2>{t('result.title')}</h2>
       </header>
 
       <div className="narrative">
@@ -104,36 +119,54 @@ export const EstimateResult = forwardRef<HTMLElement, Props>(function EstimateRe
 
       <div className="stats">
         <div>
-          <span>Consumo observado</span>
+          <span>{t('result.observed')}</span>
           <strong>
-            {kwh(projection.observed.consumedKwh)} kWh / {projection.observed.elapsedDays} días
+            {t('result.observedValue', {
+              kwh: kwh(projection.observed.consumedKwh),
+              days: projection.observed.elapsedDays,
+            })}
           </strong>
         </div>
         <div>
-          <span>Promedio diario</span>
-          <strong>{kwh(projection.observed.averageDailyKwh)} kWh/día</strong>
+          <span>{t('result.dailyAverage')}</span>
+          <strong>
+            {t('result.dailyAverageValue', {
+              kwh: kwh(projection.observed.averageDailyKwh),
+            })}
+          </strong>
         </div>
         <div>
-          <span>Días del periodo</span>
+          <span>{t('result.periodDays')}</span>
           <strong>{projection.billingDays}</strong>
         </div>
         <div>
-          <span>Consumo proyectado</span>
-          <strong>{kwh(bill.billedKwh)} kWh</strong>
+          <span>{t('result.projected')}</span>
+          <strong>{t('result.projectedValue', { kwh: kwh(bill.billedKwh) })}</strong>
         </div>
       </div>
 
-      <DailyAllowanceChart comparison={estimate.dailyAllowance} />
+      <DailyAllowanceChart
+        comparison={estimate.dailyAllowance}
+        tariffCode={estimate.input.tariffCode}
+        billingCycle={estimate.input.billingCycle}
+      />
 
-      <h3>{bill.seasonLabel}</h3>
+      <div className="label-with-info result-season-title">
+        <h3>{bill.seasonLabel}</h3>
+        {bill.seasonMode === 'mixto' && (
+          <InfoPopover label={t('result.mixedInfoLabel')}>
+            {t('result.mixedInfoDescription')}
+          </InfoPopover>
+        )}
+      </div>
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Concepto</th>
-              <th>kWh</th>
-              <th>$/kWh</th>
-              <th>Importe</th>
+              <th>{t('result.colConcept')}</th>
+              <th>{t('result.colKwh')}</th>
+              <th>{t('result.colRate')}</th>
+              <th>{t('result.colAmount')}</th>
             </tr>
           </thead>
           <tbody>
@@ -151,30 +184,30 @@ export const EstimateResult = forwardRef<HTMLElement, Props>(function EstimateRe
 
       <dl className="totals">
         <div>
-          <dt>Subtotal energía</dt>
+          <dt>{t('result.energySubtotal')}</dt>
           <dd>{money(bill.energySubtotal)}</dd>
         </div>
         {bill.otherCharges > 0 && (
           <div>
-            <dt>Otros cargos</dt>
+            <dt>{t('result.otherCharges')}</dt>
             <dd>{money(bill.otherCharges)}</dd>
           </div>
         )}
         <div>
-          <dt>IVA (16%)</dt>
+          <dt>{t('result.iva')}</dt>
           <dd>{money(bill.iva)}</dd>
         </div>
         <div className="grand">
-          <dt>Total estimado</dt>
+          <dt>{t('result.total')}</dt>
           <dd>{money(bill.total)}</dd>
         </div>
       </dl>
 
       {bill.minimumApplied && (
-        <p className="notice">Se aplicó el consumo mínimo oficial del periodo.</p>
+        <p className="notice">{t('result.minimumApplied')}</p>
       )}
 
-      <h3>Supuestos</h3>
+      <h3>{t('result.assumptions')}</h3>
       <ul>
         {bill.assumptions.map((item) => (
           <li key={item}>{item}</li>
@@ -183,7 +216,7 @@ export const EstimateResult = forwardRef<HTMLElement, Props>(function EstimateRe
 
       {bill.warnings.length > 0 && (
         <>
-          <h3>Avisos</h3>
+          <h3>{t('result.warnings')}</h3>
           <ul className="warnings">
             {bill.warnings.map((item) => (
               <li key={item}>{item}</li>
@@ -195,7 +228,7 @@ export const EstimateResult = forwardRef<HTMLElement, Props>(function EstimateRe
       <DacRiskPanel dacRisk={dacRisk} />
 
       <footer className="sources">
-        <h3>Fuentes</h3>
+        <h3>{t('result.sources')}</h3>
         <ul>
           <li>
             <a href={TARIFF_SNAPSHOT_META.sourceUrl} target="_blank" rel="noreferrer">
@@ -204,21 +237,17 @@ export const EstimateResult = forwardRef<HTMLElement, Props>(function EstimateRe
           </li>
           <li>
             <a href={TARIFF_SNAPSHOT_META.agreementsUrl} target="_blank" rel="noreferrer">
-              Acuerdos y oficios SHCP en CFE
+              {t('result.sourceAgreements')}
             </a>
           </li>
           <li>
-            <a href={DAC_OFFICIAL_URL} target="_blank" rel="noreferrer">
-              Tarifa DAC (CFE): consumo mensual promedio y límites
+            <a href={TARIFF_SNAPSHOT_META.dacUrl} target="_blank" rel="noreferrer">
+              {t('result.sourceDac')}
             </a>
           </li>
           <li>
-            <a
-              href="http://www.diputados.gob.mx/LeyesBiblio/regla/n365.pdf"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Manual de disposiciones de facturación (DOF)
+            <a href={TARIFF_SNAPSHOT_META.manualUrl} target="_blank" rel="noreferrer">
+              {t('result.sourceManual')}
             </a>
           </li>
         </ul>

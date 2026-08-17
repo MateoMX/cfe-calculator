@@ -4,13 +4,21 @@ import {
   IVA_RATE,
   MONTHLY_MINIMUM_KWH,
   TARIFF_SNAPSHOT_META,
-} from '../data/tariffs-2026'
+} from '../data/tariffs'
+import {
+  blockLabel,
+  formatKwh,
+  formatMonthLabel,
+  translate,
+  type Language,
+} from '../i18n'
 import {
   addDays,
+  calendarDaysBetween,
   countSummerDaysInPeriod,
   formatDisplayDate,
   isSummerMonth,
-  MONTH_LABELS,
+  mixedSeasonInclusiveRanges,
   monthNumber,
   yearNumber,
 } from './dates'
@@ -25,6 +33,7 @@ import type {
   DailyAllowanceProfile,
   DailyBandThreshold,
   DomesticTariffCode,
+  MixedPeriodBreakdown,
   MonthNumber,
   ProjectionResult,
   RateBlock,
@@ -32,9 +41,75 @@ import type {
   SummerStartMonth,
 } from './types'
 
-/** Official DAC limit is monthly; convert to a daily pace for the usage bar (≈ 30-day month). */
+/** Official DAC limit is monthly; convert to a daily pace for comparisons (≈ 30-day month). */
 export function dacLimitDailyFromMonthly(limitKwhMonth: number): number {
-  return roundKwh(limitKwhMonth / 30)
+  return limitKwhMonth / 30
+}
+
+/** Display period for subsidised-usage figures (allowances stay monthly; usage stays daily). */
+export type AllowanceDisplayScale = 'daily' | 'monthly' | 'bimonthly'
+
+/**
+ * Scale an official monthly kWh value for display.
+ * Monthly is canonical; bimonthly is exact ×2; daily is ÷30 (no intermediate rounding).
+ */
+export function scaleMonthlyAllowanceKwh(
+  monthlyKwh: number,
+  scale: AllowanceDisplayScale,
+): number {
+  if (scale === 'bimonthly') return monthlyKwh * 2
+  if (scale === 'daily') return monthlyKwh / 30
+  return monthlyKwh
+}
+
+/**
+ * Scale an observed daily usage pace for display.
+ * Daily is canonical for usage; monthly/bimonthly are ×30 / ×60.
+ */
+export function scaleDailyUsageKwh(dailyKwh: number, scale: AllowanceDisplayScale): number {
+  if (scale === 'monthly') return dailyKwh * 30
+  if (scale === 'bimonthly') return dailyKwh * 60
+  return dailyKwh
+}
+
+/**
+ * Scale a period-total kWh value (mixto chart geometry) for display.
+ * Daily = ÷ periodDays; monthly/bimonthly normalize to 30/60-day conventions.
+ */
+export function scalePeriodAllowanceKwh(
+  periodKwh: number,
+  periodDays: number,
+  scale: AllowanceDisplayScale,
+): number {
+  const days = Math.max(1, periodDays)
+  if (scale === 'daily') return periodKwh / days
+  if (scale === 'monthly') return (periodKwh * 30) / days
+  return (periodKwh * 60) / days
+}
+
+/** Split a period total into summer / non-summer kWh by calendar day share. */
+export function splitPeriodKwhBySeasonDays(
+  periodKwh: number,
+  summerDays: number,
+  periodDays: number,
+): { summerKwh: number; nonSummerKwh: number; nonSummerDays: number } {
+  const days = Math.max(0, periodDays)
+  const summer = Math.min(Math.max(0, summerDays), days)
+  const nonSummerDays = Math.max(0, days - summer)
+  if (days <= 0) {
+    return { summerKwh: 0, nonSummerKwh: Math.max(0, periodKwh), nonSummerDays: 0 }
+  }
+  const summerKwh = Math.max(0, periodKwh) * (summer / days)
+  const nonSummerKwh = Math.max(0, periodKwh) - summerKwh
+  return { summerKwh, nonSummerKwh, nonSummerDays }
+}
+
+export function allowancePeriodUnitKey(
+  scale: AllowanceDisplayScale,
+): 'allowance.perDay' | 'allowance.perMonth' | 'allowance.perBimonth' {
+  if (scale === 'monthly') return 'allowance.perMonth'
+  if (scale === 'bimonthly') return 'allowance.perBimonth'
+  return 'allowance.perDay'
 }
 
 export function requiredHistorySlots(billingCycle: BillingCycle): number {
@@ -137,44 +212,69 @@ export function resolveSeasonMode(
   cycle: BillingCycle,
   summerDays: number,
   summerStart: SummerStartMonth | null,
+  periodDays: number = cycle === 'mensual' ? 30 : 60,
+  startsInSummer = false,
 ): {
   mode: 'verano' | 'fuera' | 'mixto'
   firstSeason: Season
   secondSeason: Season | null
   splitMonthly: boolean
+  transitionDays: number
 } {
   if (summerStart == null) {
-    return { mode: 'fuera', firstSeason: 'fuera', secondSeason: null, splitMonthly: false }
+    return {
+      mode: 'fuera',
+      firstSeason: 'fuera',
+      secondSeason: null,
+      splitMonthly: false,
+      transitionDays: 0,
+    }
   }
 
+  const outsideSummerDays = Math.max(0, periodDays - summerDays)
+  // At summer entry, classify by days newly in summer. At summer exit,
+  // the Manual classifies by days newly outside summer (arts. 27–28).
+  const transitionDays = startsInSummer ? outsideSummerDays : summerDays
+  const initialSeason: Season = startsInSummer ? 'verano' : 'fuera'
+  const laterSeason: Season = startsInSummer ? 'fuera' : 'verano'
+
   if (cycle === 'mensual') {
-    if (summerDays <= 15) {
-      return { mode: 'fuera', firstSeason: 'fuera', secondSeason: null, splitMonthly: false }
+    const season = transitionDays <= 15 ? initialSeason : laterSeason
+    return {
+      mode: season,
+      firstSeason: season,
+      secondSeason: null,
+      splitMonthly: false,
+      transitionDays,
     }
-    return { mode: 'verano', firstSeason: 'verano', secondSeason: null, splitMonthly: false }
   }
 
   // Bimestral
-  if (summerDays <= 15) {
-    return { mode: 'fuera', firstSeason: 'fuera', secondSeason: null, splitMonthly: false }
-  }
-  if (summerDays <= 30) {
+  if (transitionDays <= 15) {
     return {
-      mode: 'mixto',
-      firstSeason: 'fuera',
-      secondSeason: 'verano',
-      splitMonthly: true,
+      mode: initialSeason,
+      firstSeason: initialSeason,
+      secondSeason: null,
+      splitMonthly: false,
+      transitionDays,
     }
   }
-  if (summerDays <= 45) {
+  if (transitionDays <= 45) {
     return {
       mode: 'mixto',
-      firstSeason: 'fuera',
-      secondSeason: 'verano',
+      firstSeason: initialSeason,
+      secondSeason: laterSeason,
       splitMonthly: true,
+      transitionDays,
     }
   }
-  return { mode: 'verano', firstSeason: 'verano', secondSeason: null, splitMonthly: false }
+  return {
+    mode: laterSeason,
+    firstSeason: laterSeason,
+    secondSeason: null,
+    splitMonthly: false,
+    transitionDays,
+  }
 }
 
 function getDomesticTariff(code: Exclude<DomesticTariffCode, 'DAC'>) {
@@ -207,6 +307,8 @@ function billDomesticPortion(
   rateMonth: MonthNumber,
   rateYear: number,
   monthFactor: number,
+  language: Language,
+  includeSeasonInLabel = false,
 ): BillLine[] {
   const tariff = getDomesticTariff(code)
   const blocks = scaleBlocks(tariff.blocksBySeason[season], monthFactor)
@@ -215,9 +317,23 @@ function billDomesticPortion(
     .map((item) => {
       const rate = getPrice(code, rateMonth, season, item.block.key, rateYear)
       const amount = roundMoney(item.kwh * rate)
+      const block = blockLabel(item.block.key, language)
+      const label = includeSeasonInLabel
+        ? translate(language, 'billing.lineLabelWithSeason', {
+            tariff: tariff.name,
+            block,
+            season: translate(
+              language,
+              season === 'verano' ? 'billing.lineSeasonVerano' : 'billing.lineSeasonEstandar',
+            ),
+          })
+        : translate(language, 'billing.lineLabel', {
+            tariff: tariff.name,
+            block,
+          })
       return {
         key: item.block.key,
-        label: `${tariff.name} ${item.block.label}`,
+        label,
         kwh: roundKwh(item.kwh),
         rate,
         amount,
@@ -240,17 +356,55 @@ function mergeLines(lines: BillLine[]): BillLine[] {
   return [...map.values()]
 }
 
+/** Mixto excess: one unlabeled row when rates match; keep season labels when they differ. */
+function normalizeMixtoExcessLines(
+  lines: BillLine[],
+  tariffName: string,
+  language: Language,
+): BillLine[] {
+  const excess = lines.filter((line) => line.key === 'excedente')
+  if (excess.length === 0) return lines
+
+  const nonExcess = lines.filter((line) => line.key !== 'excedente')
+  const distinctRates = new Set(excess.map((line) => line.rate))
+
+  if (distinctRates.size === 1) {
+    const rate = excess[0]!.rate
+    const kwh = roundKwh(excess.reduce((sum, line) => sum + line.kwh, 0))
+    return [
+      ...nonExcess,
+      {
+        key: 'excedente',
+        label: translate(language, 'billing.lineLabel', {
+          tariff: tariffName,
+          block: blockLabel('excedente', language),
+        }),
+        kwh,
+        rate,
+        amount: roundMoney(kwh * rate),
+      },
+    ]
+  }
+
+  return [...nonExcess, ...excess]
+}
+
 export function estimateDomesticBill(
   input: CalculatorInput,
   projectedKwh: number,
+  language: Language = 'es',
 ): BillEstimate {
   if (input.tariffCode === 'DAC') {
-    return estimateDacBill(input, projectedKwh)
+    return estimateDacBill(input, projectedKwh, language)
   }
 
   const code = input.tariffCode
   const tariff = getDomesticTariff(code)
   const cycle = input.billingCycle
+  const cycleWord =
+    cycle === 'mensual'
+      ? translate(language, 'form.cycleWordMensual')
+      : translate(language, 'form.cycleWordBimestral')
   const assumptions: string[] = []
   const warnings: string[] = []
 
@@ -259,7 +413,19 @@ export function estimateDomesticBill(
     input.nextCutoffDate,
     input.summerStartMonth,
   )
-  const seasonResolution = resolveSeasonMode(cycle, summerDays, input.summerStartMonth)
+  const periodDays = calendarDaysBetween(input.previousCutoffDate, input.nextCutoffDate)
+  // First included service day is the day after the previous reading.
+  const startsInSummer = isSummerMonth(
+    monthNumber(addDays(input.previousCutoffDate, 1)),
+    input.summerStartMonth,
+  )
+  const seasonResolution = resolveSeasonMode(
+    cycle,
+    summerDays,
+    input.summerStartMonth,
+    periodDays,
+    startsInSummer,
+  )
 
   // Official rule: bimestral uses rates from 30 days before period end;
   // mensual uses rates from 15 days before period end.
@@ -276,7 +442,10 @@ export function estimateDomesticBill(
 
   if (minimumApplied) {
     assumptions.push(
-      `Se aplica el mínimo oficial de ${minimumKwh} kWh para un periodo ${cycle}.`,
+      translate(language, 'billing.minAssumption', {
+        minimum: minimumKwh,
+        cycle: cycleWord,
+      }),
     )
   }
 
@@ -284,10 +453,10 @@ export function estimateDomesticBill(
     const season = seasonResolution.firstSeason
     seasonLabel =
       season === 'verano'
-        ? 'Temporada de verano'
+        ? translate(language, 'billing.seasonVerano')
         : code === '1'
-          ? 'Sin temporada de verano diferenciada'
-          : 'Temporada fuera de verano'
+          ? translate(language, 'billing.seasonNone')
+          : translate(language, 'billing.seasonFuera')
     lines = billDomesticPortion(
       code,
       billedKwh,
@@ -295,40 +464,89 @@ export function estimateDomesticBill(
       primaryRef.month,
       primaryRef.year,
       monthFactor,
+      language,
     )
     assumptions.push(
-      `Cuotas del mes de ${MONTH_LABELS[primaryRef.month]} ${primaryRef.year} (${primaryOffset} días antes del corte), conforme al Manual de facturación.`,
+      translate(language, 'billing.rateAssumption', {
+        month: formatMonthLabel(primaryRef.month, language),
+        year: primaryRef.year,
+        offset: primaryOffset,
+      }),
     )
   } else {
-    // Split bimonthly consumption into two monthly halves with potentially different seasons/rates.
-    const half = billedKwh / 2
-    const firstOffset = summerDays > 30 && summerDays <= 45 ? 60 : 30
-    const secondOffset = summerDays > 30 && summerDays <= 45 ? 30 : 0
+    // Day-weighted mixto: attribute kWh by summer/non-summer day share and prorate
+    // each season's official monthly cupos by seasonDays / 30.
+    const nonSummerDays = Math.max(0, periodDays - summerDays)
+    const firstSeason = seasonResolution.firstSeason
+    const secondSeason = seasonResolution.secondSeason!
+    const firstDays = firstSeason === 'verano' ? summerDays : nonSummerDays
+    const secondDays = secondSeason === 'verano' ? summerDays : nonSummerDays
+    const firstKwh = periodDays > 0 ? billedKwh * (firstDays / periodDays) : 0
+    const secondKwh = billedKwh - firstKwh
+    const firstFactor = firstDays / 30
+    const secondFactor = secondDays / 30
+
+    const firstOffset = seasonResolution.transitionDays <= 30 ? 30 : 60
+    const secondOffset = seasonResolution.transitionDays <= 30 ? 0 : 30
     const firstRef = rateLookupMonth(input.nextCutoffDate, firstOffset)
     const secondRef =
       secondOffset === 0
         ? { year: yearNumber(input.nextCutoffDate), month: monthNumber(input.nextCutoffDate) }
         : rateLookupMonth(input.nextCutoffDate, secondOffset)
 
-    // Determine which half is summer vs non-summer based on entry vs exit.
-    // Heuristic: if the period starts in summer, first half is summer (exit mixto).
-    const startsInSummer = isSummerMonth(
-      monthNumber(input.previousCutoffDate),
-      input.summerStartMonth,
+    seasonLabel = translate(language, 'billing.seasonMixto')
+    lines = normalizeMixtoExcessLines(
+      mergeLines([
+        ...billDomesticPortion(
+          code,
+          firstKwh,
+          firstSeason,
+          firstRef.month,
+          firstRef.year,
+          firstFactor,
+          language,
+          true,
+        ),
+        ...billDomesticPortion(
+          code,
+          secondKwh,
+          secondSeason,
+          secondRef.month,
+          secondRef.year,
+          secondFactor,
+          language,
+          true,
+        ),
+      ]),
+      tariff.name,
+      language,
     )
-    const firstSeason: Season = startsInSummer ? 'verano' : 'fuera'
-    const secondSeason: Season = startsInSummer ? 'fuera' : 'verano'
-
-    seasonLabel = 'Periodo mixto (verano y fuera de verano)'
-    lines = mergeLines([
-      ...billDomesticPortion(code, half, firstSeason, firstRef.month, firstRef.year, 1),
-      ...billDomesticPortion(code, half, secondSeason, secondRef.month, secondRef.year, 1),
-    ])
     assumptions.push(
-      `Periodo bimestral mixto con ${summerDays} días de verano: el consumo se divide en dos fracciones mensuales iguales (50/50), supuesto alineado al tratamiento de “dos meses exactos” del Manual (disposiciones 27–28); CFE no publica la fórmula exacta del reparto.`,
+      translate(language, 'billing.mixtoAssumption', {
+        summerDays,
+        nonSummerDays,
+        summerKwh: formatKwh(roundKwh(firstSeason === 'verano' ? firstKwh : secondKwh), language),
+        nonSummerKwh: formatKwh(
+          roundKwh(firstSeason === 'fuera' ? firstKwh : secondKwh),
+          language,
+        ),
+      }),
     )
     assumptions.push(
-      `Primera fracción: ${firstSeason === 'verano' ? 'verano' : 'fuera de verano'} con cuotas de ${MONTH_LABELS[firstRef.month]}; segunda fracción: ${secondSeason === 'verano' ? 'verano' : 'fuera de verano'} con cuotas de ${MONTH_LABELS[secondRef.month]}.`,
+      translate(language, 'billing.mixtoFractions', {
+        firstSeason:
+          firstSeason === 'verano'
+            ? translate(language, 'billing.seasonWordVerano')
+            : translate(language, 'billing.seasonWordFuera'),
+        firstDays,
+        firstMonth: formatMonthLabel(firstRef.month, language),
+        secondSeason:
+          secondSeason === 'verano'
+            ? translate(language, 'billing.seasonWordVerano')
+            : translate(language, 'billing.seasonWordFuera'),
+        secondDays,
+        secondMonth: formatMonthLabel(secondRef.month, language),
+      }),
     )
   }
 
@@ -339,15 +557,22 @@ export function estimateDomesticBill(
   const total = roundMoney(ivaBase + iva)
 
   assumptions.push(
-    `Última actualización de tarifas: ${formatDisplayDate(TARIFF_SNAPSHOT_META.asOf)}. Las tarifas son correctas a esta fecha. El recibo oficial de CFE prevalece.`,
+    translate(language, 'billing.tariffAsOf', {
+      date: formatDisplayDate(TARIFF_SNAPSHOT_META.asOf, language),
+    }),
   )
   assumptions.push(
-    `Límite DAC de referencia para ${tariff.name}: ${tariff.dacLimitKwhMonth} kWh/mes (promedio móvil de 12 meses).`,
+    translate(language, 'billing.dacLimitRef', {
+      tariff: tariff.name,
+      limit: tariff.dacLimitKwhMonth,
+    }),
   )
 
   if (input.summerStartMonth != null) {
     assumptions.push(
-      `Verano local: 6 meses consecutivos a partir de ${MONTH_LABELS[input.summerStartMonth]}.`,
+      translate(language, 'billing.localSummer', {
+        month: formatMonthLabel(input.summerStartMonth, language),
+      }),
     )
   }
 
@@ -368,7 +593,11 @@ export function estimateDomesticBill(
   }
 }
 
-function estimateDacBill(input: CalculatorInput, projectedKwh: number): BillEstimate {
+function estimateDacBill(
+  input: CalculatorInput,
+  projectedKwh: number,
+  language: Language,
+): BillEstimate {
   const region =
     DAC_REGIONS.find((item) => item.regionId === input.dacRegionId) ?? DAC_REGIONS[0]!
   const summerDays = countSummerDaysInPeriod(
@@ -390,14 +619,17 @@ function estimateDacBill(input: CalculatorInput, projectedKwh: number): BillEsti
   const lines: BillLine[] = [
     {
       key: 'cargoFijo',
-      label: `DAC cargo fijo (${region.regionName})`,
+      label: translate(language, 'billing.dacFixed', { region: region.regionName }),
       kwh: 0,
       rate: region.fixedCharge,
       amount: fixed,
     },
     {
       key: 'energia',
-      label: `DAC energía (${useSummer ? 'verano' : 'fuera de verano'})`,
+      label: translate(
+        language,
+        useSummer ? 'billing.dacEnergyVerano' : 'billing.dacEnergyFuera',
+      ),
       kwh: roundKwh(billedKwh),
       rate: energyRate,
       amount: energyAmount,
@@ -413,7 +645,10 @@ function estimateDacBill(input: CalculatorInput, projectedKwh: number): BillEsti
   )
 
   return {
-    seasonLabel: useSummer ? 'DAC en temporada de verano' : 'DAC fuera de verano',
+    seasonLabel: translate(
+      language,
+      useSummer ? 'billing.dacSeasonVerano' : 'billing.dacSeasonFuera',
+    ),
     seasonMode: useSummer ? 'verano' : 'fuera',
     rateMonth: ref.month,
     rateYear: ref.year,
@@ -425,27 +660,27 @@ function estimateDacBill(input: CalculatorInput, projectedKwh: number): BillEsti
     iva,
     total,
     assumptions: [
-      'DAC usa cargo fijo más energía sin bloques subsidiados.',
-      `Tarifas DAC regionales actualizadas y correctas al ${formatDisplayDate(TARIFF_SNAPSHOT_META.asOf)}; confirma el oficio mensual de tu recibo.`,
+      translate(language, 'billing.dacAssumption1'),
+      translate(language, 'billing.dacAssumption2', {
+        date: formatDisplayDate(TARIFF_SNAPSHOT_META.asOf, language),
+      }),
     ],
-    warnings: [
-      'La reclasificación a DAC depende del promedio móvil de 12 meses, no de un solo periodo.',
-    ],
+    warnings: [translate(language, 'billing.dacWarning')],
   }
 }
 
 export function assessDacRisk(
   input: CalculatorInput,
   projection?: ProjectionResult,
+  language: Language = 'es',
 ): DacRisk {
   const required = requiredHistorySlots(input.billingCycle)
   const provided = filledHistoryValues(input.historicalPeriodKwh).length
   const currentMonthlyPaceKwh =
     projection != null ? roundKwh(projection.observed.averageDailyKwh * 30) : null
-  const formatMonth = (value: number) =>
-    new Intl.NumberFormat('es-MX', { maximumFractionDigits: 1 }).format(value)
+  const formatMonth = (value: number) => formatKwh(value, language, 1)
 
-  if (input.tariffCode === 'DAC' || input.alreadyOnDac) {
+  if (input.tariffCode === 'DAC') {
     return {
       applicable: true,
       status: 'already_dac',
@@ -458,22 +693,24 @@ export function assessDacRisk(
       currentPaceAboveLimit: null,
       aboveLimit: true,
       projectedAboveLimit: null,
-      message:
-        'Tu servicio está o se indicó como DAC. El cálculo usa cargos DAC; para volver a tarifa doméstica se requiere promedio bajo el límite durante 12 meses y trámite ante CFE.',
+      message: translate(language, 'dac.alreadyMessage'),
       detailParagraphs: [
-        'La reclasificación a DAC no depende de un solo recibo: CFE usa el promedio móvil del consumo durante los últimos 12 meses.',
-        'Para salir de DAC debes mantener un Consumo Mensual Promedio inferior al límite de tu localidad y gestionar el cambio ante CFE.',
+        translate(language, 'dac.alreadyDetail1'),
+        translate(language, 'dac.alreadyDetail2'),
       ],
     }
   }
 
   const tariff = getDomesticTariff(input.tariffCode)
   const limit = tariff.dacLimitKwhMonth
-  const cycleLabel = input.billingCycle === 'mensual' ? 'mensuales' : 'bimestrales'
+  const cycleLabel =
+    input.billingCycle === 'mensual'
+      ? translate(language, 'dac.cycleMensuales')
+      : translate(language, 'dac.cycleBimestrales')
   const historyRule =
     input.billingCycle === 'mensual'
-      ? 'Para el promedio oficial se suman los kWh de tus últimos 12 recibos mensuales y se dividen entre 12.'
-      : 'Aunque tu facturación sea bimestral, el límite DAC se expresa en kWh/mes. Se suman los kWh de tus últimos 6 recibos (cada uno cubre ~2 meses) y se dividen entre 12.'
+      ? translate(language, 'dac.historyRuleMensual')
+      : translate(language, 'dac.historyRuleBimestral')
 
   const currentPaceAboveLimit =
     currentMonthlyPaceKwh != null ? currentMonthlyPaceKwh > limit : null
@@ -483,9 +720,15 @@ export function assessDacRisk(
     const missing = Math.max(0, required - provided)
     const paceNote =
       currentPaceAboveLimit === true && currentMonthlyPaceKwh != null
-        ? `Si mantuvieras durante un mes el ritmo observado en este periodo, usarías aproximadamente ${formatMonth(currentMonthlyPaceKwh)} kWh/mes, por encima del límite de ${limit} kWh/mes. Esta es una proyección de tu uso actual, no tu promedio móvil DAC.`
+        ? translate(language, 'dac.incompletePaceAbove', {
+            pace: formatMonth(currentMonthlyPaceKwh),
+            limit,
+          })
         : currentMonthlyPaceKwh != null
-          ? `Si mantuvieras durante un mes el ritmo observado en este periodo, usarías aproximadamente ${formatMonth(currentMonthlyPaceKwh)} kWh/mes (límite ${limit} kWh/mes). Esta es una proyección de tu uso actual, no tu promedio móvil DAC.`
+          ? translate(language, 'dac.incompletePaceOk', {
+              pace: formatMonth(currentMonthlyPaceKwh),
+              limit,
+            })
           : ''
 
     return {
@@ -500,13 +743,24 @@ export function assessDacRisk(
       currentPaceAboveLimit,
       aboveLimit: null,
       projectedAboveLimit: null,
-      message: `Límite DAC de ${tariff.name}: ${limit} kWh/mes. ${paceNote} Para estimar tu promedio móvil de 12 meses y el riesgo real de DAC necesitamos tus últimos ${required} consumos ${cycleLabel}. Faltan ${missing} por capturar.`,
+      message: translate(language, 'dac.incompleteMessage', {
+        tariff: tariff.name,
+        limit,
+        paceNote,
+        required,
+        cycleLabel,
+        missing,
+      }),
       detailParagraphs: [
         historyRule,
-        'CFE determina el riesgo DAC con el promedio móvil de 12 meses, no con la proyección de un solo periodo. Sin esos consumos previos no podemos estimar tu promedio real ni confirmar si estás en riesgo de alto consumo.',
+        translate(language, 'dac.incompleteDetailMain'),
         provided === 0
-          ? `Captura los ${required} consumos ${cycleLabel} en la sección opcional del formulario (el “Consumo (kWh)” de cada recibo en tu historial CFE).`
-          : `Ya capturaste ${provided} de ${required}. Completa los ${missing} faltantes para calcular tu promedio de 12 meses y una proyección del siguiente ciclo.`,
+          ? translate(language, 'dac.incompleteDetailEmpty', { required, cycleLabel })
+          : translate(language, 'dac.incompleteDetailPartial', {
+              provided,
+              required,
+              missing,
+            }),
       ],
     }
   }
@@ -530,30 +784,48 @@ export function assessDacRisk(
 
   const detailParagraphs = [
     historyRule,
-    `Tu promedio de los últimos 12 meses es ${formatMonth(average)} kWh/mes (límite ${limit} kWh/mes).`,
+    translate(language, 'dac.avgDetail', {
+      average: formatMonth(average),
+      limit,
+    }),
   ]
 
   if (currentMonthlyPaceKwh != null) {
     detailParagraphs.push(
-      `Si mantienes tu ritmo actual (~${formatMonth(currentMonthlyPaceKwh)} kWh/mes), el consumo proyectado de este periodo es ${formatMonth(projection!.projectedKwh)} kWh.`,
+      translate(language, 'dac.paceDetail', {
+        pace: formatMonth(currentMonthlyPaceKwh),
+        projected: formatMonth(projection!.projectedKwh),
+      }),
     )
   }
 
   if (projectedNext != null) {
     detailParagraphs.push(
       projectedAboveLimit
-        ? `Al reemplazar el periodo más antiguo con este consumo proyectado, el promedio móvil estimado quedaría en ${formatMonth(projectedNext)} kWh/mes: superior al límite DAC.`
-        : `Al reemplazar el periodo más antiguo con este consumo proyectado, el promedio móvil estimado quedaría en ${formatMonth(projectedNext)} kWh/mes: aún bajo el límite DAC.`,
+        ? translate(language, 'dac.nextAbove', { next: formatMonth(projectedNext) })
+        : translate(language, 'dac.nextBelow', { next: formatMonth(projectedNext) }),
     )
   }
 
   const message = aboveLimit
-    ? `Tu promedio de 12 meses (${formatMonth(average)} kWh/mes) ya es superior al límite de ${limit} kWh/mes. Hay riesgo de reclasificación a DAC.`
+    ? translate(language, 'dac.messageAbove', {
+        average: formatMonth(average),
+        limit,
+      })
     : projectedAboveLimit && projectedNext != null
-      ? `Tu promedio de 12 meses (${formatMonth(average)} kWh/mes) aún está bajo el límite, pero si mantienes este ritmo el promedio estimado del siguiente ciclo (${formatMonth(projectedNext)} kWh/mes) sería superior a ${limit} kWh/mes.`
-      : `Tu promedio de 12 meses (${formatMonth(average)} kWh/mes) está bajo el límite de ${limit} kWh/mes.${
+      ? translate(language, 'dac.messageCrossing', {
+          average: formatMonth(average),
+          next: formatMonth(projectedNext),
+          limit,
+        })
+      : `${translate(language, 'dac.messageBelow', {
+          average: formatMonth(average),
+          limit,
+        })}${
           projectedNext != null
-            ? ` Con el ritmo actual, el promedio estimado del siguiente ciclo sería ${formatMonth(projectedNext)} kWh/mes.`
+            ? translate(language, 'dac.messageBelowNext', {
+                next: formatMonth(projectedNext),
+              })
             : ''
         }`
 
@@ -592,80 +864,334 @@ export function allocateDomesticBlocks(
     }))
 }
 
-function formatDailyKwh(value: number): string {
-  return new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }).format(value)
+function formatScaledUsageKwh(
+  dailyValue: number,
+  language: Language,
+  scale: AllowanceDisplayScale,
+): string {
+  return formatKwh(scaleDailyUsageKwh(dailyValue, scale), language)
 }
 
-function seasonProfileLabel(season: Season, code: Exclude<DomesticTariffCode, 'DAC'>): string {
-  if (code === '1') return 'Sin temporada diferenciada'
-  return season === 'verano' ? 'Temporada de verano' : 'Fuera de verano'
+function formatScaledMonthlyKwh(
+  monthlyValue: number,
+  language: Language,
+  scale: AllowanceDisplayScale,
+): string {
+  return formatKwh(scaleMonthlyAllowanceKwh(monthlyValue, scale), language)
+}
+
+function seasonProfileLabel(
+  season: Season | 'mixto',
+  code: Exclude<DomesticTariffCode, 'DAC'>,
+  language: Language,
+): string {
+  if (season === 'mixto') return translate(language, 'billing.seasonProfileMixto')
+  if (code === '1') return translate(language, 'billing.seasonProfileNone')
+  return season === 'verano'
+    ? translate(language, 'billing.seasonProfileVerano')
+    : translate(language, 'billing.seasonProfileFuera')
 }
 
 /**
- * Convert monthly finite blocks into average daily thresholds for a comparison window.
- * periodDays is the number of days those (scaled) allowances cover.
+ * Allocate one season's attributed kWh through day-prorated official monthly cupos.
+ * Band units are period totals for that season (allowance × seasonDays / 30).
+ */
+export function buildSeasonProratedAllowanceProfile(
+  code: Exclude<DomesticTariffCode, 'DAC'>,
+  season: Season,
+  seasonDays: number,
+  seasonKwh: number,
+  rateMonth: MonthNumber,
+  rateYear: number,
+  language: Language = 'es',
+): DailyAllowanceProfile {
+  const tariff = getDomesticTariff(code)
+  const factor = Math.max(0, seasonDays) / 30
+  const finite = tariff.blocksBySeason[season].filter((block) =>
+    Number.isFinite(block.allowanceKwh),
+  )
+  const scaled = finite.map((block) => ({
+    ...block,
+    allowanceKwh: block.allowanceKwh * factor,
+  }))
+
+  let remaining = Math.max(0, seasonKwh)
+  let cumulative = 0
+  const bands: DailyBandThreshold[] = []
+  for (const block of scaled) {
+    const key = block.key as DailyBandThreshold['key']
+    const allowed = block.allowanceKwh
+    if (allowed <= 0) continue
+    const used = Math.min(remaining, allowed)
+    remaining = Math.max(0, remaining - used)
+    cumulative += allowed
+    bands.push({
+      key,
+      label: blockLabel(block.key, language),
+      bandMonthlyKwh: roundKwh(allowed),
+      cumulativeMonthlyKwh: roundKwh(cumulative),
+      ratePerKwh: getPrice(code, rateMonth, season, block.key, rateYear),
+      usedKwh: roundKwh(used),
+    })
+  }
+
+  return {
+    season,
+    seasonLabel:
+      season === 'verano'
+        ? translate(language, 'allowance.seasonSummer')
+        : translate(language, 'allowance.seasonStandard'),
+    bands,
+    subsidizedCeilingMonthlyKwh: roundKwh(cumulative),
+    excedenteRatePerKwh: getPrice(code, rateMonth, season, 'excedente', rateYear),
+    excessUsedKwh: roundKwh(remaining),
+  }
+}
+
+/**
+ * Build separate summer and standard allowance profiles for a mixed-period chart.
+ */
+export function buildMixedAllowanceProfiles(
+  code: Exclude<DomesticTariffCode, 'DAC'>,
+  summerDays: number,
+  nonSummerDays: number,
+  summerKwh: number,
+  nonSummerKwh: number,
+  veranoRef: { month: MonthNumber; year: number },
+  fueraRef: { month: MonthNumber; year: number },
+  language: Language = 'es',
+): DailyAllowanceProfile[] {
+  return [
+    buildSeasonProratedAllowanceProfile(
+      code,
+      'verano',
+      summerDays,
+      summerKwh,
+      veranoRef.month,
+      veranoRef.year,
+      language,
+    ),
+    buildSeasonProratedAllowanceProfile(
+      code,
+      'fuera',
+      nonSummerDays,
+      nonSummerKwh,
+      fueraRef.month,
+      fueraRef.year,
+      language,
+    ),
+  ]
+}
+
+/**
+ * Build subsidised-band thresholds from official monthly allowances.
+ * monthFactor / periodDays are accepted for call-site compatibility but unused:
+ * display scales derive daily (÷30) and bimonthly (×2) from the monthly values.
  */
 export function buildDailyAllowanceProfile(
   code: Exclude<DomesticTariffCode, 'DAC'>,
   season: Season,
-  monthFactor: number,
-  periodDays: number,
+  _monthFactor: number,
+  _periodDays: number,
   rateMonth: MonthNumber,
   rateYear: number,
+  language: Language = 'es',
 ): DailyAllowanceProfile {
   const tariff = getDomesticTariff(code)
-  const scaled = scaleBlocks(tariff.blocksBySeason[season], monthFactor)
-  const finite = scaled.filter((block) => Number.isFinite(block.allowanceKwh))
-  const days = Math.max(1, periodDays)
+  const finite = tariff.blocksBySeason[season].filter((block) =>
+    Number.isFinite(block.allowanceKwh),
+  )
 
   let cumulative = 0
   const bands: DailyBandThreshold[] = finite.map((block) => {
-    const bandDailyKwh = roundKwh(block.allowanceKwh / days)
-    cumulative = roundKwh(cumulative + bandDailyKwh)
+    const bandMonthlyKwh = block.allowanceKwh
+    cumulative += bandMonthlyKwh
     return {
       key: block.key as DailyBandThreshold['key'],
-      label: block.label,
-      bandDailyKwh,
-      cumulativeDailyKwh: cumulative,
+      label: blockLabel(block.key, language),
+      bandMonthlyKwh,
+      cumulativeMonthlyKwh: cumulative,
       ratePerKwh: getPrice(code, rateMonth, season, block.key, rateYear),
     }
   })
 
   return {
     season,
-    seasonLabel: seasonProfileLabel(season, code),
+    seasonLabel: seasonProfileLabel(season, code, language),
     bands,
-    subsidizedCeilingDailyKwh: bands[bands.length - 1]?.cumulativeDailyKwh ?? 0,
+    subsidizedCeilingMonthlyKwh: bands[bands.length - 1]?.cumulativeMonthlyKwh ?? 0,
     excedenteRatePerKwh: getPrice(code, rateMonth, season, 'excedente', rateYear),
   }
 }
 
-function guidanceForProfile(averageDailyKwh: number, profile: DailyAllowanceProfile): string {
-  const avg = formatDailyKwh(averageDailyKwh)
+function guidanceForProfile(
+  averageDailyKwh: number,
+  profile: DailyAllowanceProfile,
+  language: Language,
+  scale: AllowanceDisplayScale = 'daily',
+): string {
+  const unit = translate(language, allowancePeriodUnitKey(scale))
+  const avg = formatScaledUsageKwh(averageDailyKwh, language, scale)
+  const avgMonthly = scaleDailyUsageKwh(averageDailyKwh, 'monthly')
   if (profile.bands.length === 0) {
-    return `Tu promedio es de ${avg} kWh/día.`
+    return translate(language, 'guidance.simpleAvg', { avg, unit })
   }
 
   const first = profile.bands[0]!
-  if (averageDailyKwh <= first.cumulativeDailyKwh) {
-    const headroom = roundKwh(first.cumulativeDailyKwh - averageDailyKwh)
-    return `Tu promedio (${avg} kWh/día) cabe en ${first.label}. Te quedan ${formatDailyKwh(headroom)} kWh/día antes de pasar al siguiente bloque.`
+  if (avgMonthly <= first.cumulativeMonthlyKwh) {
+    const headroom = first.cumulativeMonthlyKwh - avgMonthly
+    return translate(language, 'guidance.inFirst', {
+      avg,
+      band: first.label,
+      headroom: formatScaledMonthlyKwh(headroom, language, scale),
+      unit,
+    })
   }
 
   for (let i = 1; i < profile.bands.length; i += 1) {
     const band = profile.bands[i]!
     const previous = profile.bands[i - 1]!
-    if (averageDailyKwh <= band.cumulativeDailyKwh) {
-      const abovePrevious = roundKwh(averageDailyKwh - previous.cumulativeDailyKwh)
-      const headroom = roundKwh(band.cumulativeDailyKwh - averageDailyKwh)
-      return `Tu promedio (${avg} kWh/día) supera ${previous.label} por ${formatDailyKwh(abovePrevious)} kWh/día y aún cabe en ${band.label}. Te quedan ${formatDailyKwh(headroom)} kWh/día antes del excedente.`
+    if (avgMonthly <= band.cumulativeMonthlyKwh) {
+      const abovePrevious = avgMonthly - previous.cumulativeMonthlyKwh
+      const headroom = band.cumulativeMonthlyKwh - avgMonthly
+      return translate(language, 'guidance.inMiddle', {
+        avg,
+        previous: previous.label,
+        above: formatScaledMonthlyKwh(abovePrevious, language, scale),
+        band: band.label,
+        headroom: formatScaledMonthlyKwh(headroom, language, scale),
+        unit,
+      })
     }
   }
 
-  const ceiling = profile.subsidizedCeilingDailyKwh
+  const ceiling = profile.subsidizedCeilingMonthlyKwh
   const last = profile.bands[profile.bands.length - 1]!
-  const excess = roundKwh(averageDailyKwh - ceiling)
-  return `Tu promedio (${avg} kWh/día) supera ${last.label} por ${formatDailyKwh(excess)} kWh/día: esa parte se cobra como Excedente (precio alto).`
+  const excess = avgMonthly - ceiling
+  return translate(language, 'guidance.excess', {
+    avg,
+    band: last.label,
+    excess: formatScaledMonthlyKwh(excess, language, scale),
+    unit,
+  })
+}
+
+function guidanceForSeasonPortion(
+  seasonKwh: number,
+  seasonDays: number,
+  profile: DailyAllowanceProfile,
+  language: Language,
+  scale: AllowanceDisplayScale,
+): string {
+  const unit = translate(language, allowancePeriodUnitKey(scale))
+  const days = Math.max(1, seasonDays)
+  const avgDaily = seasonKwh / days
+  const avg = formatScaledUsageKwh(avgDaily, language, scale)
+  const formatPortion = (periodValue: number) =>
+    formatKwh(scalePeriodAllowanceKwh(periodValue, days, scale), language)
+
+  if (profile.bands.length === 0) {
+    return translate(language, 'guidance.simpleAvg', { avg, unit })
+  }
+
+  const first = profile.bands[0]!
+  if (seasonKwh <= first.cumulativeMonthlyKwh) {
+    const headroom = first.cumulativeMonthlyKwh - seasonKwh
+    return translate(language, 'guidance.inFirst', {
+      avg,
+      band: first.label,
+      headroom: formatPortion(headroom),
+      unit,
+    })
+  }
+
+  for (let i = 1; i < profile.bands.length; i += 1) {
+    const band = profile.bands[i]!
+    const previous = profile.bands[i - 1]!
+    if (seasonKwh <= band.cumulativeMonthlyKwh) {
+      const abovePrevious = seasonKwh - previous.cumulativeMonthlyKwh
+      const headroom = band.cumulativeMonthlyKwh - seasonKwh
+      return translate(language, 'guidance.inMiddle', {
+        avg,
+        previous: previous.label,
+        above: formatPortion(abovePrevious),
+        band: band.label,
+        headroom: formatPortion(headroom),
+        unit,
+      })
+    }
+  }
+
+  const ceiling = profile.subsidizedCeilingMonthlyKwh
+  const last = profile.bands[profile.bands.length - 1]!
+  const excess = seasonKwh - ceiling
+  return translate(language, 'guidance.excess', {
+    avg,
+    band: last.label,
+    excess: formatPortion(excess),
+    unit,
+  })
+}
+
+/** Format subsidised-usage guidance for a display period (default: daily). */
+export function formatAllowanceGuidance(
+  comparison: Pick<
+    DailyAllowanceComparison,
+    'mode' | 'averageDailyKwh' | 'profiles' | 'guidance' | 'mixedPeriod'
+  >,
+  language: Language,
+  scale: AllowanceDisplayScale = 'daily',
+): string {
+  if (!comparison.profiles.length || comparison.mode === 'dac') {
+    return comparison.guidance
+  }
+
+  const avg = comparison.averageDailyKwh
+  if (comparison.mode === 'mixto' && comparison.mixedPeriod) {
+    const mixed = comparison.mixedPeriod
+    const unit = translate(language, allowancePeriodUnitKey(scale))
+    const summerProfile = comparison.profiles.find((profile) => profile.season === 'verano')
+    const standardProfile = comparison.profiles.find((profile) => profile.season === 'fuera')
+    const parts = [
+      translate(language, 'guidance.mixtoIntro', {
+        avg: formatScaledUsageKwh(avg, language, scale),
+        unit,
+        summerDays: mixed.summerDays,
+        nonSummerDays: mixed.nonSummerDays,
+        summerKwh: formatKwh(mixed.summerKwh, language),
+        nonSummerKwh: formatKwh(mixed.nonSummerKwh, language),
+      }),
+    ]
+    if (summerProfile) {
+      parts.push(
+        translate(language, 'guidance.mixtoVerano', {
+          text: guidanceForSeasonPortion(
+            mixed.summerKwh,
+            mixed.summerDays,
+            summerProfile,
+            language,
+            scale,
+          ),
+        }),
+      )
+    }
+    if (standardProfile) {
+      parts.push(
+        translate(language, 'guidance.mixtoFuera', {
+          text: guidanceForSeasonPortion(
+            mixed.nonSummerKwh,
+            mixed.nonSummerDays,
+            standardProfile,
+            language,
+            scale,
+          ),
+        }),
+      )
+    }
+    return parts.join(' ')
+  }
+
+  return guidanceForProfile(avg, comparison.profiles[0]!, language, scale)
 }
 
 function mixtoRateRefs(input: CalculatorInput): {
@@ -677,27 +1203,36 @@ function mixtoRateRefs(input: CalculatorInput): {
     input.nextCutoffDate,
     input.summerStartMonth,
   )
-  const firstOffset = summerDays > 30 && summerDays <= 45 ? 60 : 30
-  const secondOffset = summerDays > 30 && summerDays <= 45 ? 30 : 0
+  const periodDays = calendarDaysBetween(input.previousCutoffDate, input.nextCutoffDate)
+  // First included service day is the day after the previous reading.
+  const startsInSummer = isSummerMonth(
+    monthNumber(addDays(input.previousCutoffDate, 1)),
+    input.summerStartMonth,
+  )
+  const resolution = resolveSeasonMode(
+    input.billingCycle,
+    summerDays,
+    input.summerStartMonth,
+    periodDays,
+    startsInSummer,
+  )
+  const firstOffset = resolution.transitionDays <= 30 ? 30 : 60
+  const secondOffset = resolution.transitionDays <= 30 ? 0 : 30
   const firstRef = rateLookupMonth(input.nextCutoffDate, firstOffset)
   const secondRef =
     secondOffset === 0
       ? { year: yearNumber(input.nextCutoffDate), month: monthNumber(input.nextCutoffDate) }
       : rateLookupMonth(input.nextCutoffDate, secondOffset)
 
-  const startsInSummer = isSummerMonth(
-    monthNumber(input.previousCutoffDate),
-    input.summerStartMonth,
-  )
-  const firstSeason: Season = startsInSummer ? 'verano' : 'fuera'
+  const firstSeason = resolution.firstSeason
   return firstSeason === 'verano'
     ? { verano: firstRef, fuera: secondRef }
     : { fuera: firstRef, verano: secondRef }
 }
 
 /**
- * Average daily cheap-band allowances for the user's tariff and season resolution,
- * compared against observed averageDailyKwh.
+ * Official monthly cheap-band allowances for the user's tariff and season resolution,
+ * compared against observed averageDailyKwh (via a 30-day monthly pace).
  */
 export function buildDailyAllowanceComparison(
   input: CalculatorInput,
@@ -706,6 +1241,7 @@ export function buildDailyAllowanceComparison(
   seasonMode: BillEstimate['seasonMode'],
   rateMonth: MonthNumber,
   rateYear: number,
+  language: Language = 'es',
 ): DailyAllowanceComparison {
   if (input.tariffCode === 'DAC') {
     return {
@@ -714,9 +1250,8 @@ export function buildDailyAllowanceComparison(
       averageDailyKwh: roundKwh(averageDailyKwh),
       billingDays,
       profiles: [],
-      guidance:
-        'La tarifa DAC no tiene bloques subsidiados (Básico/Intermedio): toda la energía se cobra a la cuota DAC más el cargo fijo.',
-      dacLimitDailyKwh: null,
+      mixedPeriod: null,
+      guidance: translate(language, 'guidance.dac'),
       dacLimitKwhMonth: null,
       currentPaceAboveDacLimit: null,
     }
@@ -726,51 +1261,77 @@ export function buildDailyAllowanceComparison(
   const days = Math.max(1, billingDays)
   const tariff = getDomesticTariff(code)
   const dacLimitKwhMonth = tariff.dacLimitKwhMonth
-  const dacLimitDailyKwh = dacLimitDailyFromMonthly(dacLimitKwhMonth)
   const avgDaily = roundKwh(averageDailyKwh)
-  const currentPaceAboveDacLimit = avgDaily > dacLimitDailyKwh
+  const monthlyPace = scaleDailyUsageKwh(avgDaily, 'monthly')
+  const currentPaceAboveDacLimit = monthlyPace > dacLimitKwhMonth
 
   if (seasonMode === 'mixto') {
-    // Mixto bills two monthly halves independently; each profile uses one month of blocks
-    // over half the billing period (≈ 30 days when the ciclo is 60).
-    const halfDays = Math.max(1, days / 2)
+    const summerDays = countSummerDaysInPeriod(
+      input.previousCutoffDate,
+      input.nextCutoffDate,
+      input.summerStartMonth,
+    )
+    const periodDays = calendarDaysBetween(input.previousCutoffDate, input.nextCutoffDate)
+    const periodUsage = avgDaily * Math.max(1, periodDays)
+    const split = splitPeriodKwhBySeasonDays(periodUsage, summerDays, periodDays)
     const refs = mixtoRateRefs(input)
-    const fuera = buildDailyAllowanceProfile(
+    const profiles = buildMixedAllowanceProfiles(
       code,
-      'fuera',
-      1,
-      halfDays,
-      refs.fuera.month,
-      refs.fuera.year,
+      summerDays,
+      split.nonSummerDays,
+      split.summerKwh,
+      split.nonSummerKwh,
+      refs.verano,
+      refs.fuera,
+      language,
     )
-    const verano = buildDailyAllowanceProfile(
-      code,
-      'verano',
-      1,
-      halfDays,
-      refs.verano.month,
-      refs.verano.year,
+    const seasonRanges = mixedSeasonInclusiveRanges(
+      input.previousCutoffDate,
+      input.nextCutoffDate,
+      input.summerStartMonth,
     )
+    const mixedPeriod: MixedPeriodBreakdown = {
+      periodDays: Math.max(1, periodDays),
+      summerDays,
+      nonSummerDays: split.nonSummerDays,
+      summerKwh: roundKwh(split.summerKwh),
+      nonSummerKwh: roundKwh(split.nonSummerKwh),
+      summerRange: seasonRanges.summerRange,
+      nonSummerRange: seasonRanges.nonSummerRange,
+    }
     return {
       applicable: true,
       mode: 'mixto',
       averageDailyKwh: avgDaily,
       billingDays: days,
-      profiles: [fuera, verano],
-      guidance: [
-        `Periodo mixto: el consumo se reparte en dos fracciones mensuales. Compara tu promedio (${formatDailyKwh(averageDailyKwh)} kWh/día) con cada temporada.`,
-        `Fuera de verano: ${guidanceForProfile(averageDailyKwh, fuera)}`,
-        `Verano: ${guidanceForProfile(averageDailyKwh, verano)}`,
-      ].join(' '),
-      dacLimitDailyKwh,
+      profiles,
+      mixedPeriod,
+      guidance: formatAllowanceGuidance(
+        {
+          mode: 'mixto',
+          averageDailyKwh: avgDaily,
+          profiles,
+          mixedPeriod,
+          guidance: '',
+        },
+        language,
+        'daily',
+      ),
       dacLimitKwhMonth,
       currentPaceAboveDacLimit,
     }
   }
 
   const season: Season = seasonMode === 'verano' ? 'verano' : 'fuera'
-  const monthFactor = input.billingCycle === 'mensual' ? 1 : 2
-  const profile = buildDailyAllowanceProfile(code, season, monthFactor, days, rateMonth, rateYear)
+  const profile = buildDailyAllowanceProfile(
+    code,
+    season,
+    1,
+    30,
+    rateMonth,
+    rateYear,
+    language,
+  )
 
   return {
     applicable: true,
@@ -778,8 +1339,8 @@ export function buildDailyAllowanceComparison(
     averageDailyKwh: avgDaily,
     billingDays: days,
     profiles: [profile],
-    guidance: guidanceForProfile(averageDailyKwh, profile),
-    dacLimitDailyKwh,
+    mixedPeriod: null,
+    guidance: guidanceForProfile(averageDailyKwh, profile, language),
     dacLimitKwhMonth,
     currentPaceAboveDacLimit,
   }

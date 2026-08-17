@@ -1,0 +1,67 @@
+name: CFE data watch
+
+on:
+  schedule:
+    # Monday 14:17 UTC — GitHub cron is UTC-only and can be delayed under load.
+    - cron: '17 14 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cfe-data-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Test monitor units
+        run: npm test -- scripts/cfe-monitor
+
+      - name: Check CFE data
+        id: detect
+        continue-on-error: true
+        run: npm run check:cfe-data
+
+      - name: Upload monitor report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfe-monitor-report
+          path: artifacts/cfe-monitor/**
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Send status email
+        if: always()
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          ALERT_TO: ${{ secrets.ALERT_TO }}
+          REPORT_PATH: artifacts/cfe-monitor/report.json
+          CFE_ARTIFACT_NAME: cfe-monitor-report
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: npm run alert:cfe
+
+      - name: Fail when check could not complete
+        if: steps.detect.outcome == 'failure'
+        run: |
+          echo "CFE monitor reported unable_to_check or crashed."
+          exit 1

@@ -24,6 +24,27 @@ describe('projection', () => {
     expect(projection.projectedKwh).toBe(750)
   })
 
+  it('rounds projected consumption to the nearest whole kWh', () => {
+    const input = {
+      ...createEmptyInput(),
+      previousReading: 1000,
+      currentReading: 1200,
+      previousCutoffDate: '2026-07-08',
+      currentReadingDate: '2026-07-17',
+      nextCutoffDate: '2026-09-06',
+      billingCycle: 'bimestral' as const,
+      tariffCode: '1B' as const,
+      summerStartMonth: 5 as const,
+    }
+
+    const projection = projectConsumption(input)
+    // 200 kWh / 9 days ≈ 22.222… × 60 days = 1,333.333… → 1,333
+    expect(projection.observed.consumedKwh).toBe(200)
+    expect(projection.observed.elapsedDays).toBe(9)
+    expect(projection.billingDays).toBe(60)
+    expect(projection.projectedKwh).toBe(1333)
+  })
+
   it('rejects inverted readings and dates', () => {
     const issues = validateCalculatorInput({
       ...createEmptyInput(),

@@ -1,15 +1,37 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
+import { AppNav } from './components/AppNav'
 import { CalculatorForm } from './components/CalculatorForm'
 import { EstimateResult } from './components/EstimateResult'
-import { TARIFF_OPTIONS, TARIFF_SNAPSHOT_META } from './data/tariffs-2026'
+import { InfoPopover } from './components/InfoPopover'
+import { LanguageSwitcher } from './components/LanguageSwitcher'
+import { MobileShell } from './components/MobileShell'
+import { TariffReferencePage } from './components/TariffReferencePage'
+import { TARIFF_OPTIONS, TARIFF_SNAPSHOT_META } from './data/tariffs'
 import {
   defaultNextCutoff,
   formatDisplayDate,
   isPreviousCutoffFresh,
-  SUMMER_START_OPTIONS,
+  SUMMER_START_VALUES,
 } from './domain/dates'
 import { createEmptyInput, estimateBill, requiredHistorySlots } from './domain/estimate'
 import type { CalculatorInput, FullEstimate, SummerStartMonth, ValidationIssue } from './domain/types'
+import { useIsMobile } from './hooks/useIsMobile'
+import {
+  LanguageProvider,
+  resolveInitialLanguage,
+  useI18n,
+  type Language,
+} from './i18n'
+import {
+  readAppViewFromLocation,
+  setAppViewHash,
+  type AppView,
+} from './navigation'
+import {
+  buildShareUrl,
+  copyTextToClipboard,
+  parseCalculatorInputFromHash,
+} from './shareLink'
 import './App.css'
 
 const PREFERENCES_STORAGE_KEY = 'cfe-calculator.preferences.v1'
@@ -19,10 +41,7 @@ function isTariffCode(value: unknown): value is CalculatorInput['tariffCode'] {
 }
 
 function isSummerStartMonth(value: unknown): value is SummerStartMonth {
-  return (
-    typeof value === 'number' &&
-    SUMMER_START_OPTIONS.some((option) => option.value === value)
-  )
+  return typeof value === 'number' && SUMMER_START_VALUES.includes(value as SummerStartMonth)
 }
 
 function createInputWithSavedPreferences(): CalculatorInput {
@@ -77,18 +96,153 @@ function createInputWithSavedPreferences(): CalculatorInput {
   }
 }
 
-export default function App() {
-  const [input, setInput] = useState<CalculatorInput>(() => createInputWithSavedPreferences())
+function createInitialInput(): CalculatorInput {
+  const fromPreferences = createInputWithSavedPreferences()
+  const fromShare = parseCalculatorInputFromHash(window.location.hash)
+  return fromShare ?? fromPreferences
+}
+
+interface DesktopLayoutProps {
+  input: CalculatorInput
+  issues: ValidationIssue[]
+  estimate: FullEstimate | null
+  resultRef: RefObject<HTMLElement | null>
+  formInstanceKey: number
+  onChange: (next: CalculatorInput) => void
+  onSubmit: () => void
+  onCopyShareLink: () => Promise<boolean>
+  onNavigate: (view: AppView) => void
+}
+
+function DesktopLayout({
+  input,
+  issues,
+  estimate,
+  resultRef,
+  formInstanceKey,
+  onChange,
+  onSubmit,
+  onCopyShareLink,
+  onNavigate,
+}: DesktopLayoutProps) {
+  const { language, t } = useI18n()
+
+  return (
+    <div className="page">
+      <header className="hero">
+        <div className="hero-top">
+          <AppNav view="calculator" onNavigate={onNavigate} />
+          <h1>{t('app.title')}</h1>
+          <LanguageSwitcher />
+        </div>
+        <p>{t('app.blurb')}</p>
+        <div className="info-tip">
+          {t('app.infoTip')}{' '}
+          <InfoPopover label={t('app.madeWithLoveLabel')}>{t('app.madeWithLove')}</InfoPopover>
+        </div>
+        <p className="privacy-note">
+          <svg className="privacy-note-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+            <path
+              d="M10 1.75 3.75 4.25v4.6c0 3.85 2.5 7.45 6.25 8.9 3.75-1.45 6.25-5.05 6.25-8.9V4.25L10 1.75Z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M7.6 10.05 9.2 11.6l3.3-3.45"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          {t('app.privacyNote')}
+        </p>
+      </header>
+
+      <main className="layout">
+        <CalculatorForm
+          key={formInstanceKey}
+          value={input}
+          issues={issues}
+          onChange={onChange}
+          onSubmit={onSubmit}
+          onCopyShareLink={onCopyShareLink}
+        />
+        {estimate ? (
+          <EstimateResult ref={resultRef} estimate={estimate} />
+        ) : (
+          <aside className="card placeholder">
+            <h2>{t('app.placeholderTitle')}</h2>
+            <p>{t('app.placeholderBody')}</p>
+            <ul>
+              <li>{t('app.placeholderItem1')}</li>
+              <li>{t('app.placeholderItem2')}</li>
+              <li>{t('app.placeholderItem3')}</li>
+            </ul>
+            <p className="meta">
+              {t('app.metaUpdated', {
+                date: formatDisplayDate(TARIFF_SNAPSHOT_META.asOf, language),
+              })}
+            </p>
+          </aside>
+        )}
+      </main>
+
+      <footer className="page-footer">
+        <p>{t('app.footer')}</p>
+      </footer>
+    </div>
+  )
+}
+
+function AppContent() {
+  const { language } = useI18n()
+  const isMobile = useIsMobile()
+  const [view, setView] = useState<AppView>(() => readAppViewFromLocation())
+  const [input, setInput] = useState<CalculatorInput>(() => createInitialInput())
   const [issues, setIssues] = useState<ValidationIssue[]>([])
   const [estimate, setEstimate] = useState<FullEstimate | null>(null)
+  const [formInstanceKey, setFormInstanceKey] = useState(0)
   const resultRef = useRef<HTMLElement>(null)
   const shouldScrollToResult = useRef(false)
+  const shouldRebuildOnLanguageChange = useRef(false)
+  const previousLanguage = useRef(language)
+  const lastShareHash = useRef(window.location.hash)
+
+  useEffect(() => {
+    function syncFromHash() {
+      setView(readAppViewFromLocation())
+      const hash = window.location.hash
+      if (hash === lastShareHash.current) return
+      lastShareHash.current = hash
+      const shared = parseCalculatorInputFromHash(hash)
+      if (!shared) return
+      setInput(shared)
+      setIssues([])
+      setEstimate(null)
+      shouldRebuildOnLanguageChange.current = false
+      setFormInstanceKey((current) => current + 1)
+    }
+    syncFromHash()
+    window.addEventListener('hashchange', syncFromHash)
+    return () => window.removeEventListener('hashchange', syncFromHash)
+  }, [])
+
+  function handleNavigate(next: AppView) {
+    setView(next)
+    setAppViewHash(next)
+    lastShareHash.current = window.location.hash
+  }
 
   useEffect(() => {
     try {
       window.localStorage.setItem(
         PREFERENCES_STORAGE_KEY,
         JSON.stringify({
+          language,
           tariffCode: input.tariffCode,
           summerStartMonth: input.summerStartMonth,
           billingCycle: input.billingCycle,
@@ -100,6 +254,7 @@ export default function App() {
       // The calculator remains usable when browser storage is unavailable.
     }
   }, [
+    language,
     input.tariffCode,
     input.summerStartMonth,
     input.billingCycle,
@@ -108,69 +263,100 @@ export default function App() {
   ])
 
   useEffect(() => {
-    if (!shouldScrollToResult.current || !estimate) return
+    if (!shouldScrollToResult.current || !estimate || isMobile) return
     shouldScrollToResult.current = false
     resultRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
-  }, [estimate])
+  }, [estimate, isMobile])
 
-  function handleSubmit() {
-    const result = estimateBill(input)
+  useEffect(() => {
+    if (previousLanguage.current === language) return
+    previousLanguage.current = language
+    if (!shouldRebuildOnLanguageChange.current) return
+    const result = estimateBill(input, language)
     setIssues(result.issues)
     setEstimate(result.estimate)
+  }, [language, input])
+
+  function handleSubmit() {
+    const result = estimateBill(input, language)
+    setIssues(result.issues)
+    setEstimate(result.estimate)
+    shouldRebuildOnLanguageChange.current = true
     if (result.estimate) {
       shouldScrollToResult.current = true
     }
   }
 
+  function handleChange(next: CalculatorInput) {
+    setInput(next)
+    setIssues([])
+  }
+
+  async function handleCopyShareLink(): Promise<boolean> {
+    return copyTextToClipboard(buildShareUrl(input))
+  }
+
+  if (view === 'tariffs') {
+    if (isMobile) {
+      return <MobileTariffsShell onNavigate={handleNavigate} />
+    }
+    return <TariffReferencePage onNavigate={handleNavigate} />
+  }
+
+  if (isMobile) {
+    return (
+      <MobileShell
+        input={input}
+        issues={issues}
+        estimate={estimate}
+        formInstanceKey={formInstanceKey}
+        onChange={handleChange}
+        onSubmit={handleSubmit}
+        onCopyShareLink={handleCopyShareLink}
+        onNavigate={handleNavigate}
+      />
+    )
+  }
+
   return (
-    <div className="page">
-      <header className="hero">
-        <h1>Calculadora de recibo CFE</h1>
-        <p>
-          Estima tu próximo recibo doméstico a partir de lecturas del medidor, tu tarifa, el punto del
-          ciclo de facturación y la temporada de verano. Todo corre en tu navegador; no se envían datos
-          a ningún servidor.
-        </p>
+    <DesktopLayout
+      input={input}
+      issues={issues}
+      estimate={estimate}
+      resultRef={resultRef}
+      formInstanceKey={formInstanceKey}
+      onChange={handleChange}
+      onSubmit={handleSubmit}
+      onCopyShareLink={handleCopyShareLink}
+      onNavigate={handleNavigate}
+    />
+  )
+}
+
+function MobileTariffsShell({ onNavigate }: { onNavigate: (view: AppView) => void }) {
+  const { t } = useI18n()
+
+  return (
+    <div className="m-app m-app--tariffs">
+      <header className="m-app-bar">
+        <div className="m-app-bar-leading">
+          <AppNav view="tariffs" onNavigate={onNavigate} />
+          <h1 className="m-app-bar-title">{t('tariffs.title')}</h1>
+        </div>
+        <LanguageSwitcher />
       </header>
-
-      <main className="layout">
-        <CalculatorForm
-          value={input}
-          issues={issues}
-          onChange={(next) => {
-            setInput(next)
-            setIssues([])
-          }}
-          onSubmit={handleSubmit}
-        />
-        {estimate ? (
-          <EstimateResult ref={resultRef} estimate={estimate} />
-        ) : (
-          <aside className="card placeholder">
-            <h2>Tu resultado aparecerá aquí</h2>
-            <p>
-              Completa el formulario con los datos de tu recibo y medidor. Verás el desglose por
-              bloques (básico, intermedio, excedente), IVA y una explicación en lenguaje claro.
-            </p>
-            <ul>
-              <li>Tarifas 1, 1A–1F y DAC</li>
-              <li>Ciclos mensual y bimestral</li>
-              <li>Reglas de verano y periodos mixtos</li>
-            </ul>
-            <p className="meta">
-              Última actualización: <strong>{formatDisplayDate(TARIFF_SNAPSHOT_META.asOf)}</strong>.
-              Las tarifas son correctas a esta fecha.
-            </p>
-          </aside>
-        )}
-      </main>
-
-      <footer className="page-footer">
-        <p>
-          No afiliado a CFE. Estimación informativa basada en publicaciones oficiales. El aviso-recibo
-          prevalece sobre esta herramienta.
-        </p>
-      </footer>
+      <div className="m-tariffs-scroll">
+        <TariffReferencePage onNavigate={onNavigate} compact />
+        <p className="m-footer">{t('app.footer')}</p>
+      </div>
     </div>
+  )
+}
+
+export default function App({ initialLanguage }: { initialLanguage?: Language } = {}) {
+  return (
+    <LanguageProvider initialLanguage={initialLanguage ?? resolveInitialLanguage()}>
+      <AppContent />
+    </LanguageProvider>
   )
 }

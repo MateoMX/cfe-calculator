@@ -1,5 +1,6 @@
 import type {
   DomesticTariffDefinition,
+  DacMonthSchedule,
   DacRegionRates,
   MonthNumber,
   RateBlock,
@@ -14,11 +15,14 @@ export const TARIFF_SNAPSHOT_META: TariffSnapshotMeta = {
   sourceUrl: 'https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/',
   agreementsUrl:
     'https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Acuerdos/AcuerdosCasa.aspx',
+  dacUrl:
+    'https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Tarifas/TarifaDAC.aspx',
+  manualUrl: 'http://www.diputados.gob.mx/LeyesBiblio/regla/n365.pdf',
   notes: [
     'Última actualización: 16 de julio de 2026. Las tarifas son correctas a esta fecha.',
     'Los bloques mensuales provienen del esquema oficial de tarifas domésticas 1–1F.',
     'Las cuotas 1B de julio 2026 (verano) se verificaron en el portal CFE: básico 1.010, intermedio 1.171, excedente 4.016.',
-    'DAC julio 2026: Oficio SHCP 349-B-1-069 (cargo fijo 144.95 y cuotas regionales verificadas).',
+    'DAC: cuotas regionales oficiales mes a mes (enero–julio 2026) del portal CFE / oficios SHCP; julio = Oficio 349-B-1-069.',
     'El verano local es de seis meses consecutivos a partir del mes de inicio fijado para la localidad.',
     'En periodos bimestrales mixtos, el consumo se divide en dos fracciones mensuales iguales (supuesto documentado; el Manual no detalla el reparto exacto del kWh agregado).',
   ],
@@ -358,51 +362,124 @@ export const DOMESTIC_TARIFFS: Record<
   ),
 }
 
-/** DAC July 2026 from Oficio SHCP 349-B-1-069 (verified via CFE agreements page). */
-export const DAC_REGIONS: DacRegionRates[] = [
+type DacMonthRow = {
+  month: MonthNumber
+  fixedCharge: number
+  regions: Array<{
+    regionId: string
+    regionName: string
+    energySummer: number
+    energyNonSummer: number | null
+  }>
+}
+
+/**
+ * Official monthly DAC schedules from the CFE Tarifa DAC portal
+ * (section 6.- Cuotas aplicables) and matching SHCP monthly oficios.
+ * Only months with published values are included (Jan–Jul 2026 as of asOf).
+ */
+const DAC_MONTH_ROWS: DacMonthRow[] = [
   {
-    regionId: 'baja-california',
-    regionName: 'Baja California',
-    fixedCharge: 144.95,
-    energySummer: 6.528,
-    energyNonSummer: 5.606,
+    month: 1,
+    fixedCharge: 142.41,
+    regions: [
+      { regionId: 'baja-california', regionName: 'Baja California', energySummer: 6.469, energyNonSummer: 5.557 },
+      { regionId: 'baja-california-sur', regionName: 'Baja California Sur', energySummer: 7.049, energyNonSummer: 5.557 },
+      { regionId: 'noroeste', regionName: 'Noroeste', energySummer: 6.234, energyNonSummer: null },
+      { regionId: 'norte-noreste', regionName: 'Norte y Noreste', energySummer: 6.073, energyNonSummer: null },
+      { regionId: 'sur-peninsular', regionName: 'Sur y Peninsular', energySummer: 6.169, energyNonSummer: null },
+      { regionId: 'central', regionName: 'Central', energySummer: 6.653, energyNonSummer: null },
+    ],
   },
   {
-    regionId: 'baja-california-sur',
-    regionName: 'Baja California Sur',
-    fixedCharge: 144.95,
-    energySummer: 7.113,
-    energyNonSummer: 5.606,
+    month: 2,
+    fixedCharge: 143.19,
+    regions: [
+      { regionId: 'baja-california', regionName: 'Baja California', energySummer: 6.45, energyNonSummer: 5.54 },
+      { regionId: 'baja-california-sur', regionName: 'Baja California Sur', energySummer: 7.028, energyNonSummer: 5.54 },
+      { regionId: 'noroeste', regionName: 'Noroeste', energySummer: 6.215, energyNonSummer: null },
+      { regionId: 'norte-noreste', regionName: 'Norte y Noreste', energySummer: 6.055, energyNonSummer: null },
+      { regionId: 'sur-peninsular', regionName: 'Sur y Peninsular', energySummer: 6.15, energyNonSummer: null },
+      { regionId: 'central', regionName: 'Central', energySummer: 6.633, energyNonSummer: null },
+    ],
   },
   {
-    regionId: 'noroeste',
-    regionName: 'Noroeste',
-    fixedCharge: 144.95,
-    energySummer: 6.289,
-    energyNonSummer: null,
+    month: 3,
+    fixedCharge: 144.46,
+    regions: [
+      { regionId: 'baja-california', regionName: 'Baja California', energySummer: 7.038, energyNonSummer: 6.045 },
+      { regionId: 'baja-california-sur', regionName: 'Baja California Sur', energySummer: 7.669, energyNonSummer: 6.045 },
+      { regionId: 'noroeste', regionName: 'Noroeste', energySummer: 6.782, energyNonSummer: null },
+      { regionId: 'norte-noreste', regionName: 'Norte y Noreste', energySummer: 6.607, energyNonSummer: null },
+      { regionId: 'sur-peninsular', regionName: 'Sur y Peninsular', energySummer: 6.711, energyNonSummer: null },
+      { regionId: 'central', regionName: 'Central', energySummer: 7.238, energyNonSummer: null },
+    ],
   },
   {
-    regionId: 'norte-noreste',
-    regionName: 'Norte y Noreste',
+    month: 4,
     fixedCharge: 144.95,
-    energySummer: 6.127,
-    energyNonSummer: null,
+    regions: [
+      { regionId: 'baja-california', regionName: 'Baja California', energySummer: 6.392, energyNonSummer: 5.49 },
+      { regionId: 'baja-california-sur', regionName: 'Baja California Sur', energySummer: 6.965, energyNonSummer: 5.49 },
+      { regionId: 'noroeste', regionName: 'Noroeste', energySummer: 6.159, energyNonSummer: null },
+      { regionId: 'norte-noreste', regionName: 'Norte y Noreste', energySummer: 6.0, energyNonSummer: null },
+      { regionId: 'sur-peninsular', regionName: 'Sur y Peninsular', energySummer: 6.095, energyNonSummer: null },
+      { regionId: 'central', regionName: 'Central', energySummer: 6.574, energyNonSummer: null },
+    ],
   },
   {
-    regionId: 'sur-peninsular',
-    regionName: 'Sur y Peninsular',
-    fixedCharge: 144.95,
-    energySummer: 6.225,
-    energyNonSummer: null,
+    month: 5,
+    fixedCharge: 145.24,
+    regions: [
+      { regionId: 'baja-california', regionName: 'Baja California', energySummer: 6.653, energyNonSummer: 5.714 },
+      { regionId: 'baja-california-sur', regionName: 'Baja California Sur', energySummer: 7.249, energyNonSummer: 5.714 },
+      { regionId: 'noroeste', regionName: 'Noroeste', energySummer: 6.41, energyNonSummer: null },
+      { regionId: 'norte-noreste', regionName: 'Norte y Noreste', energySummer: 6.245, energyNonSummer: null },
+      { regionId: 'sur-peninsular', regionName: 'Sur y Peninsular', energySummer: 6.344, energyNonSummer: null },
+      { regionId: 'central', regionName: 'Central', energySummer: 6.842, energyNonSummer: null },
+    ],
   },
   {
-    regionId: 'central',
-    regionName: 'Central',
+    month: 6,
+    fixedCharge: 144.79,
+    regions: [
+      { regionId: 'baja-california', regionName: 'Baja California', energySummer: 6.566, energyNonSummer: 5.639 },
+      { regionId: 'baja-california-sur', regionName: 'Baja California Sur', energySummer: 7.154, energyNonSummer: 5.639 },
+      { regionId: 'noroeste', regionName: 'Noroeste', energySummer: 6.326, energyNonSummer: null },
+      { regionId: 'norte-noreste', regionName: 'Norte y Noreste', energySummer: 6.163, energyNonSummer: null },
+      { regionId: 'sur-peninsular', regionName: 'Sur y Peninsular', energySummer: 6.261, energyNonSummer: null },
+      { regionId: 'central', regionName: 'Central', energySummer: 6.752, energyNonSummer: null },
+    ],
+  },
+  {
+    month: 7,
     fixedCharge: 144.95,
-    energySummer: 6.713,
-    energyNonSummer: null,
+    regions: [
+      { regionId: 'baja-california', regionName: 'Baja California', energySummer: 6.528, energyNonSummer: 5.606 },
+      { regionId: 'baja-california-sur', regionName: 'Baja California Sur', energySummer: 7.113, energyNonSummer: 5.606 },
+      { regionId: 'noroeste', regionName: 'Noroeste', energySummer: 6.289, energyNonSummer: null },
+      { regionId: 'norte-noreste', regionName: 'Norte y Noreste', energySummer: 6.127, energyNonSummer: null },
+      { regionId: 'sur-peninsular', regionName: 'Sur y Peninsular', energySummer: 6.225, energyNonSummer: null },
+      { regionId: 'central', regionName: 'Central', energySummer: 6.713, energyNonSummer: null },
+    ],
   },
 ]
+
+export const DAC_MONTHLY_SCHEDULES: DacMonthSchedule[] = DAC_MONTH_ROWS.map((row) => ({
+  year: 2026,
+  month: row.month,
+  regions: row.regions.map((region) => ({
+    regionId: region.regionId,
+    regionName: region.regionName,
+    fixedCharge: row.fixedCharge,
+    energySummer: region.energySummer,
+    energyNonSummer: region.energyNonSummer,
+  })),
+}))
+
+/** Latest published DAC month in this snapshot (used by the calculator). */
+export const DAC_REGIONS: DacRegionRates[] =
+  DAC_MONTHLY_SCHEDULES[DAC_MONTHLY_SCHEDULES.length - 1]!.regions
 
 export const IVA_RATE = 0.16
 export const MONTHLY_MINIMUM_KWH = 25

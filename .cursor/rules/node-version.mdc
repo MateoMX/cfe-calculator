@@ -1,0 +1,35 @@
+---
+description: Use nvm Node 24 in Cursor agent shells (avoid bundled Node 20)
+alwaysApply: true
+---
+
+# Node version for agent shells
+
+Cursor’s agent shell prepends its bundled Node (`~/.cursor-server/.../node`, currently v20.x) ahead of nvm on `PATH`. Plain `node` / `npm` therefore hit the wrong runtime even though WSL/nvm has Node 24.
+
+## Required before any node/npm command
+
+Prefix every Shell invocation that runs `node`, `npm`, `npx`, `vite`, `vitest`, or project scripts:
+
+```bash
+export PATH="$HOME/.nvm/versions/node/v24.12.0/bin:$PATH"
+hash -r
+```
+
+Then verify once per session when relevant:
+
+```bash
+node -v   # must be v24.x, not v20.x
+which node  # must be under ~/.nvm/versions/node/
+```
+
+## Do not
+
+- Rely on bare `nvm use` alone — Cursor’s Node still wins on `PATH` unless nvm’s `bin` is prepended
+- Downgrade Vite / tooling to match the bundled Node 20
+- Ignore engines warnings that mention Node 20.18.x
+
+## Project pin
+
+- Prefer Node **24** (see `.nvmrc` and CI `node-version: 24`)
+- If the nvm patch version changes, update the PATH prefix to the installed `v24.*` under `~/.nvm/versions/node/`

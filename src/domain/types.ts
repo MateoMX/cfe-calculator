@@ -48,12 +48,21 @@ export interface DacRegionRates {
   energyNonSummer: number | null
 }
 
+/** Official regional DAC charges for one calendar month. */
+export interface DacMonthSchedule {
+  year: number
+  month: MonthNumber
+  regions: DacRegionRates[]
+}
+
 export interface TariffSnapshotMeta {
   asOf: string
   year: number
   sourceName: string
   sourceUrl: string
   agreementsUrl: string
+  dacUrl: string
+  manualUrl: string
   notes: string[]
 }
 
@@ -67,7 +76,6 @@ export interface CalculatorInput {
   currentReadingDate: string
   nextCutoffDate: string
   optionalOtherCharges: number
-  alreadyOnDac: boolean
   dacRegionId: string
   /**
    * Billing-period consumptions from prior receipts (kWh per period).
@@ -148,40 +156,81 @@ export interface DacRisk {
   detailParagraphs: string[]
 }
 
-/** Finite subsidized band expressed as an average daily allowance. */
+/** Finite subsidized band expressed as the official monthly allowance. */
 export interface DailyBandThreshold {
   key: Exclude<BlockKey, 'excedente' | 'energia' | 'cargoFijo'>
   label: string
-  /** This band's own average daily allowance (kWh/día). */
-  bandDailyKwh: number
-  /** Cumulative ceiling through this band (kWh/día). */
-  cumulativeDailyKwh: number
-  /** Official energy price for this band ($/kWh). */
-  ratePerKwh: number
+  /**
+   * This band's own allowance in chart units:
+   * monthly kWh for single-season profiles; period-total kWh for mixto.
+   */
+  bandMonthlyKwh: number
+  /** Cumulative ceiling through this band (same units as bandMonthlyKwh). */
+  cumulativeMonthlyKwh: number
+  /**
+   * Official energy price for this band ($/kWh).
+   * Null when a mixto aggregate merges seasons/months with different rates.
+   */
+  ratePerKwh: number | null
+  /**
+   * Precomputed used amount in the same units as bandMonthlyKwh.
+   * When set (mixto), the chart skips re-allocating from the average.
+   */
+  usedKwh?: number
 }
 
 export interface DailyAllowanceProfile {
-  season: Season
+  season: Season | 'mixto'
   seasonLabel: string
   bands: DailyBandThreshold[]
-  /** Highest cumulative ceiling among finite (cheap) bands. */
-  subsidizedCeilingDailyKwh: number
-  /** Official Excedente price for this season/month ($/kWh). */
-  excedenteRatePerKwh: number
+  /**
+   * Highest cumulative ceiling among finite (cheap) bands
+   * (monthly kWh for single-season; period-total kWh for mixto).
+   */
+  subsidizedCeilingMonthlyKwh: number
+  /**
+   * Official Excedente price for this season/month ($/kWh).
+   * Null when mixto seasons/months disagree.
+   */
+  excedenteRatePerKwh: number | null
+  /** Precomputed excess used in chart units (mixto period totals). */
+  excessUsedKwh?: number
+}
+
+/** Inclusive calendar span for one season inside a mixed billing period. */
+export interface InclusiveDateRange {
+  startISO: string
+  endISO: string
+}
+
+/** Day-weighted summer / non-summer split for a mixed bimonthly period. */
+export interface MixedPeriodBreakdown {
+  periodDays: number
+  summerDays: number
+  nonSummerDays: number
+  /** Usage attributed to summer days (kWh for the period). */
+  summerKwh: number
+  /** Usage attributed to non-summer days (kWh for the period). */
+  nonSummerKwh: number
+  /** Inclusive service-day span for summer days in (previousCutoff, nextCutoff]. */
+  summerRange: InclusiveDateRange | null
+  /** Inclusive service-day span for non-summer/standard days in the same period. */
+  nonSummerRange: InclusiveDateRange | null
 }
 
 export interface DailyAllowanceComparison {
   applicable: boolean
   mode: 'verano' | 'fuera' | 'mixto' | 'dac'
+  /** Observed usage pace (kWh/día); native measurement for the chart. */
   averageDailyKwh: number
   billingDays: number
   profiles: DailyAllowanceProfile[]
+  /** Present when mode is mixto; describes the day-weighted seasonal split. */
+  mixedPeriod: MixedPeriodBreakdown | null
   guidance: string
-  /** Official DAC monthly limit expressed as an average daily pace (kWh/día ≈ limit/30). */
-  dacLimitDailyKwh: number | null
-  /** Official DAC monthly limit for the selected domestic tariff. */
+  /** Official DAC monthly limit for the selected domestic tariff (kWh/mes). */
   dacLimitKwhMonth: number | null
-  /** True when the current daily pace exceeds the DAC daily equivalent. */
+  /** True when the current monthly pace (daily average × 30) exceeds the DAC monthly limit. */
   currentPaceAboveDacLimit: boolean | null
 }
 

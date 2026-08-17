@@ -1,51 +1,63 @@
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
+import { useI18n, type MessageKey } from '../i18n'
 
 export type BillExampleKey =
   | 'tariff'
   | 'previousCutoffDate'
   | 'previousReading'
-  | 'dacHistory'
+  | 'dacHistoryNewest'
+  | 'dacHistoryOlder'
 
-interface BillExampleContent {
-  title: string
-  description: string
-  imageAlt: string
-  highlightLabel: string
-  imageSet: 'example1' | 'example2'
+/** Midpoint (%) of each kWh history row on CFE-Example2.png (1-based lines 1–11). */
+export const DAC_HISTORY_LINE_MIDS_PERCENT = [
+  17.02, 21.74, 27.33, 32.78, 38.36, 43.82, 49.34, 54.85, 60.37, 65.82, 71.34,
+] as const
+
+export const DAC_HISTORY_LINE_COUNT = DAC_HISTORY_LINE_MIDS_PERCENT.length
+
+interface BillExampleMeta {
+  titleKey: MessageKey
+  descriptionKey: MessageKey
+  imageAltKey: MessageKey
+  highlightLabelKey: MessageKey
+  imageSet: 'example1' | 'example1Desktop' | 'example2'
 }
 
-const EXAMPLES: Record<BillExampleKey, BillExampleContent> = {
+const EXAMPLES: Record<BillExampleKey, BillExampleMeta> = {
   tariff: {
-    title: 'Dónde está la tarifa',
-    description:
-      'En tu aviso-recibo busca la línea “TARIFA”. Ahí aparece el código (por ejemplo 1B) que debes seleccionar en este formulario.',
-    imageAlt: 'Ejemplo de recibo CFE con la tarifa resaltada',
-    highlightLabel: 'Tarifa impresa en el recibo',
+    titleKey: 'example.tariff.title',
+    descriptionKey: 'example.tariff.description',
+    imageAltKey: 'example.tariff.alt',
+    highlightLabelKey: 'example.tariff.highlight',
     imageSet: 'example1',
   },
   previousCutoffDate: {
-    title: 'Dónde está la fecha de la última lectura',
-    description:
-      'Busca “PERIODO FACTURADO”. La fecha final del periodo es la del último corte o lectura del recibo anterior; úsala como fecha de corte previo.',
-    imageAlt: 'Ejemplo de recibo CFE con la fecha de última lectura resaltada',
-    highlightLabel: 'Fecha de la última lectura',
+    titleKey: 'example.previousCutoffDate.title',
+    descriptionKey: 'example.previousCutoffDate.description',
+    imageAltKey: 'example.previousCutoffDate.alt',
+    highlightLabelKey: 'example.previousCutoffDate.highlight',
     imageSet: 'example1',
   },
   previousReading: {
-    title: 'Dónde está la lectura anterior',
-    description:
-      'En la tabla de consumo, la columna “Lectura actual” del recibo anterior es la lectura del medidor al corte. Captúrala aquí como lectura anterior.',
-    imageAlt: 'Ejemplo de recibo CFE con la lectura actual del medidor resaltada',
-    highlightLabel: 'Lectura del medidor al corte',
+    titleKey: 'example.previousReading.title',
+    descriptionKey: 'example.previousReading.description',
+    imageAltKey: 'example.previousReading.alt',
+    highlightLabelKey: 'example.previousReading.highlight',
     imageSet: 'example1',
   },
-  dacHistory: {
-    title: 'Dónde está el historial de consumo',
-    description:
-      'En el historial del aviso-recibo usa la columna “kWh”. Para un ciclo bimestral captura los 6 consumos más recientes (el de arriba es el más nuevo).',
-    imageAlt: 'Ejemplo de historial CFE con la columna de kWh resaltada',
-    highlightLabel: 'Consumos previos en kWh',
+  dacHistoryNewest: {
+    titleKey: 'example.dacHistoryNewest.title',
+    descriptionKey: 'example.dacHistoryNewest.description',
+    imageAltKey: 'example.dacHistoryNewest.alt',
+    highlightLabelKey: 'example.dacHistoryNewest.highlight',
+    imageSet: 'example1Desktop',
+  },
+  dacHistoryOlder: {
+    titleKey: 'example.dacHistoryOlder.title',
+    descriptionKey: 'example.dacHistoryOlder.description',
+    imageAltKey: 'example.dacHistoryOlder.alt',
+    highlightLabelKey: 'example.dacHistoryOlder.highlight',
     imageSet: 'example2',
   },
 }
@@ -56,17 +68,31 @@ function publicAsset(fileName: string): string {
   return `${normalized}${fileName}`
 }
 
+export interface ActiveBillExample {
+  exampleKey: BillExampleKey
+  /** 1-based kWh history row when exampleKey is dacHistoryOlder. */
+  historyLine?: number
+}
+
 interface Props {
-  exampleKey: BillExampleKey | null
+  example: ActiveBillExample | null
   onClose: () => void
 }
 
-export function BillExampleDialog({ exampleKey, onClose }: Props) {
+export function BillExampleDialog({ example, onClose }: Props) {
+  const { t } = useI18n()
   const titleId = useId()
   const descriptionId = useId()
   const closeButtonRef = useRef<HTMLButtonElement>(null)
-  const open = exampleKey !== null
-  const content = exampleKey ? EXAMPLES[exampleKey] : null
+  const open = example !== null
+  const exampleKey = example?.exampleKey ?? null
+  const meta = exampleKey ? EXAMPLES[exampleKey] : null
+  const historyLine =
+    exampleKey === 'dacHistoryOlder' && example?.historyLine != null
+      ? Math.min(Math.max(1, Math.round(example.historyLine)), DAC_HISTORY_LINE_COUNT)
+      : null
+  const historyLineMid =
+    historyLine != null ? DAC_HISTORY_LINE_MIDS_PERCENT[historyLine - 1] : null
 
   useEffect(() => {
     if (!open) return
@@ -89,14 +115,36 @@ export function BillExampleDialog({ exampleKey, onClose }: Props) {
     }
   }, [open, onClose])
 
-  if (!open || !content || !exampleKey) return null
+  if (!open || !meta || !exampleKey) return null
+
+  const description =
+    exampleKey === 'dacHistoryOlder' && historyLine != null
+      ? t('example.dacHistoryOlder.descriptionLine', { line: historyLine })
+      : t(meta.descriptionKey)
+  const highlightLabel =
+    exampleKey === 'dacHistoryOlder' && historyLine != null
+      ? t('example.dacHistoryOlder.highlightLine', { line: historyLine })
+      : t(meta.highlightLabelKey)
+
+  const content = {
+    title: t(meta.titleKey),
+    description,
+    imageAlt: t(meta.imageAltKey),
+    highlightLabel,
+    imageSet: meta.imageSet,
+  }
+
+  const historyMarkerStyle =
+    historyLineMid != null
+      ? ({ '--history-line-mid': String(historyLineMid) } as CSSProperties)
+      : undefined
 
   return createPortal(
     <div className="bill-example-root" role="presentation">
       <button
         type="button"
         className="bill-example-backdrop"
-        aria-label="Cerrar ejemplo del recibo"
+        aria-label={t('example.closeBackdrop')}
         onClick={onClose}
       />
       <div
@@ -116,7 +164,7 @@ export function BillExampleDialog({ exampleKey, onClose }: Props) {
             type="button"
             className="bill-example-close"
             onClick={onClose}
-            aria-label="Cerrar"
+            aria-label={t('example.close')}
           >
             <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
               <path
@@ -127,7 +175,10 @@ export function BillExampleDialog({ exampleKey, onClose }: Props) {
           </button>
         </header>
 
-        <div className={`bill-example-figure bill-example-figure--${content.imageSet}`}>
+        <div
+          className={`bill-example-figure bill-example-figure--${content.imageSet}`}
+          style={historyMarkerStyle}
+        >
           {content.imageSet === 'example1' ? (
             <picture>
               <source
@@ -140,6 +191,12 @@ export function BillExampleDialog({ exampleKey, onClose }: Props) {
                 className="bill-example-image"
               />
             </picture>
+          ) : content.imageSet === 'example1Desktop' ? (
+            <img
+              src={publicAsset('CFE-Example1-Desktop.png')}
+              alt={content.imageAlt}
+              className="bill-example-image"
+            />
           ) : (
             <img
               src={publicAsset('CFE-Example2.png')}
@@ -153,6 +210,14 @@ export function BillExampleDialog({ exampleKey, onClose }: Props) {
             role="img"
             aria-label={content.highlightLabel}
           />
+          {historyLine != null && (
+            <div
+              className="bill-example-history-marker"
+              data-testid="bill-example-history-marker"
+              data-history-line={historyLine}
+              aria-hidden="true"
+            />
+          )}
         </div>
       </div>
     </div>,
@@ -163,10 +228,71 @@ export function BillExampleDialog({ exampleKey, onClose }: Props) {
 interface InfoButtonProps {
   exampleKey: BillExampleKey
   label: string
-  onOpen: (exampleKey: BillExampleKey) => void
+  onOpen: (example: ActiveBillExample) => void
+  historyLine?: number
+  /** Document-only icon for the newest bill value; history uses document + magnifier. */
+  iconVariant?: 'bill' | 'history'
 }
 
-export function BillExampleInfoButton({ exampleKey, label, onOpen }: InfoButtonProps) {
+function BillIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path
+        d="M5 2.75h6.25L15.5 7v10.25H5V2.75Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M11.25 2.75V7H15.5M7.25 10.25h5.5M7.25 13h5.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function HistoryIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path
+        d="M4.25 2.75h6.5l3.5 3.5v3.1M10.75 2.75v3.5h3.5M8.75 16.75h-4.5v-14"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle
+        cx="12.25"
+        cy="12.25"
+        r="3.25"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="m14.65 14.65 2.6 2.6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+export function BillExampleInfoButton({
+  exampleKey,
+  label,
+  onOpen,
+  historyLine,
+  iconVariant = 'history',
+}: InfoButtonProps) {
   return (
     <button
       type="button"
@@ -176,20 +302,12 @@ export function BillExampleInfoButton({ exampleKey, label, onOpen }: InfoButtonP
       onClick={(event) => {
         event.preventDefault()
         event.stopPropagation()
-        onOpen(exampleKey)
+        onOpen(
+          historyLine != null ? { exampleKey, historyLine } : { exampleKey },
+        )
       }}
     >
-      <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-        <circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" strokeWidth="1.5" />
-        <circle cx="10" cy="6.25" r="1.15" fill="currentColor" />
-        <path
-          d="M10 9.1v5.2"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.7"
-          strokeLinecap="round"
-        />
-      </svg>
+      {iconVariant === 'bill' ? <BillIcon /> : <HistoryIcon />}
     </button>
   )
 }

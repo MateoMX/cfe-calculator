@@ -1,26 +1,32 @@
+import { translate, type Language } from '../i18n'
 import { calendarDaysBetween } from './dates'
 import type { BillingCycle, CalculatorInput, ProjectionResult, ValidationIssue } from './types'
 
-export function validateCalculatorInput(input: CalculatorInput): ValidationIssue[] {
+export function validateCalculatorInput(
+  input: CalculatorInput,
+  language: Language = 'es',
+): ValidationIssue[] {
   const issues: ValidationIssue[] = []
+  const t = (key: Parameters<typeof translate>[1], params?: Record<string, string | number>) =>
+    translate(language, key, params)
 
   if (!input.tariffCode) {
-    issues.push({ field: 'tariffCode', message: 'Indica la tarifa de tu recibo.' })
+    issues.push({ field: 'tariffCode', message: t('validation.tariffRequired') })
   }
   if (input.tariffCode !== '1' && input.summerStartMonth == null) {
     issues.push({
       field: 'summerStartMonth',
-      message: 'Indica el mes en que comienza el verano en tu localidad (aparece en CFE o en tu recibo).',
+      message: t('validation.summerRequired'),
     })
   }
   if (input.tariffCode === 'DAC' && !input.dacRegionId) {
-    issues.push({ field: 'dacRegionId', message: 'Selecciona la región DAC de tu recibo.' })
+    issues.push({ field: 'dacRegionId', message: t('validation.dacRegionRequired') })
   }
   if (!Number.isFinite(input.previousReading) || input.previousReading < 0) {
-    issues.push({ field: 'previousReading', message: 'La lectura anterior debe ser un número válido.' })
+    issues.push({ field: 'previousReading', message: t('validation.previousReadingInvalid') })
   }
   if (!Number.isFinite(input.currentReading) || input.currentReading < 0) {
-    issues.push({ field: 'currentReading', message: 'La lectura actual debe ser un número válido.' })
+    issues.push({ field: 'currentReading', message: t('validation.currentReadingInvalid') })
   }
   if (
     Number.isFinite(input.previousReading) &&
@@ -29,17 +35,17 @@ export function validateCalculatorInput(input: CalculatorInput): ValidationIssue
   ) {
     issues.push({
       field: 'currentReading',
-      message: 'La lectura actual no puede ser menor que la lectura anterior.',
+      message: t('validation.currentReadingTooLow'),
     })
   }
   if (!input.previousCutoffDate) {
-    issues.push({ field: 'previousCutoffDate', message: 'Indica la fecha de corte del recibo anterior.' })
+    issues.push({ field: 'previousCutoffDate', message: t('validation.previousCutoffRequired') })
   }
   if (!input.currentReadingDate) {
-    issues.push({ field: 'currentReadingDate', message: 'Indica la fecha de tu lectura actual.' })
+    issues.push({ field: 'currentReadingDate', message: t('validation.currentReadingDateRequired') })
   }
   if (!input.nextCutoffDate) {
-    issues.push({ field: 'nextCutoffDate', message: 'Indica la fecha estimada del próximo corte.' })
+    issues.push({ field: 'nextCutoffDate', message: t('validation.nextCutoffRequired') })
   }
 
   if (input.previousCutoffDate && input.currentReadingDate) {
@@ -47,7 +53,7 @@ export function validateCalculatorInput(input: CalculatorInput): ValidationIssue
     if (elapsed <= 0) {
       issues.push({
         field: 'currentReadingDate',
-        message: 'La lectura actual debe ser posterior a la fecha de corte anterior.',
+        message: t('validation.currentReadingDateOrder'),
       })
     }
   }
@@ -57,7 +63,7 @@ export function validateCalculatorInput(input: CalculatorInput): ValidationIssue
     if (billingDays <= 0) {
       issues.push({
         field: 'nextCutoffDate',
-        message: 'El próximo corte debe ser posterior a la fecha de corte anterior.',
+        message: t('validation.nextCutoffOrder'),
       })
     }
   }
@@ -70,15 +76,14 @@ export function validateCalculatorInput(input: CalculatorInput): ValidationIssue
   ) {
     issues.push({
       field: 'currentReadingDate',
-      message:
-        'La fecha de lectura rebasa el corte estimado. Revisa el corte anterior o el ciclo de facturación.',
+      message: t('validation.readingPastCutoff'),
     })
   }
 
   if (input.optionalOtherCharges < 0) {
     issues.push({
       field: 'optionalOtherCharges',
-      message: 'Los cargos adicionales no pueden ser negativos.',
+      message: t('validation.otherChargesNegative'),
     })
   }
 
@@ -91,7 +96,7 @@ export function projectConsumption(input: CalculatorInput): ProjectionResult {
   const consumedKwh = input.currentReading - input.previousReading
   const averageDailyKwh = elapsedDays > 0 ? consumedKwh / elapsedDays : 0
   const remainingDays = Math.max(0, calendarDaysBetween(input.currentReadingDate, input.nextCutoffDate))
-  const projectedKwh = averageDailyKwh * billingDays
+  const projectedKwh = Math.round(averageDailyKwh * billingDays)
 
   return {
     billingDays,

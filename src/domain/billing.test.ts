@@ -5,10 +5,14 @@ import {
   averageMonthlyFromHistory,
   buildDailyAllowanceComparison,
   buildDailyAllowanceProfile,
-  dacLimitDailyFromMonthly,
   estimateDomesticBill,
+  formatAllowanceGuidance,
   projectedNextMonthlyAverage,
   resolveSeasonMode,
+  scaleDailyUsageKwh,
+  scaleMonthlyAllowanceKwh,
+  scalePeriodAllowanceKwh,
+  splitPeriodKwhBySeasonDays,
 } from './billing'
 import { createEmptyInput, estimateBill, resizeHistoryForCycle } from './estimate'
 
@@ -55,6 +59,17 @@ describe('season mode thresholds', () => {
   it('treats mensual >15 summer days as verano', () => {
     expect(resolveSeasonMode('mensual', 16, 5).mode).toBe('verano')
     expect(resolveSeasonMode('mensual', 15, 5).mode).toBe('fuera')
+  })
+
+  it('classifies summer exit by non-summer days', () => {
+    expect(resolveSeasonMode('mensual', 11, 4, 30, true).mode).toBe('fuera')
+    expect(resolveSeasonMode('bimestral', 46, 4, 60, true).mode).toBe('verano')
+    expect(resolveSeasonMode('bimestral', 41, 4, 60, true)).toMatchObject({
+      mode: 'mixto',
+      firstSeason: 'verano',
+      secondSeason: 'fuera',
+      transitionDays: 19,
+    })
   })
 })
 
@@ -134,31 +149,184 @@ describe('bill estimate', () => {
     expect(bill.minimumApplied).toBe(true)
     expect(bill.billedKwh).toBe(50)
   })
+
+  it('uses day-weighted September summer and October non-summer rates for an October 20 mixed exit bill', () => {
+    const input = {
+      ...createEmptyInput(),
+      tariffCode: '1B' as const,
+      summerStartMonth: 4 as const,
+      billingCycle: 'bimestral' as const,
+      previousCutoffDate: '2026-08-21',
+      nextCutoffDate: '2026-10-20',
+    }
+
+    const bill = estimateDomesticBill(input, 300)
+
+    expect(bill.seasonMode).toBe('mixto')
+    // 40 summer days / 20 non-summer → 200 / 100 kWh, cupos prorated by days/30.
+    expect(bill.lines).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'basico',
+          label: 'Tarifa 1B Básico (verano)',
+          kwh: 166.667,
+          rate: 1.016,
+        }),
+        expect.objectContaining({
+          key: 'intermedio',
+          label: 'Tarifa 1B Intermedio (verano)',
+          kwh: 33.333,
+          rate: 1.179,
+        }),
+        expect.objectContaining({
+          key: 'basico',
+          label: 'Tarifa 1B Básico (estándar)',
+          kwh: 50,
+          rate: 1.14,
+        }),
+        expect.objectContaining({
+          key: 'intermedio',
+          label: 'Tarifa 1B Intermedio (estándar)',
+          kwh: 50,
+          rate: 1.385,
+        }),
+      ]),
+    )
+    expect(bill.lines.reduce((sum, line) => sum + line.kwh, 0)).toBeCloseTo(300, 3)
+    expect(bill.assumptions).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/40 días de verano y 20 fuera de verano/i),
+        expect.stringMatching(/200 kWh en verano y 100 kWh fuera/i),
+        expect.stringMatching(
+          /Primera fracción: verano \(40 días\) con cuotas de septiembre; segunda fracción: fuera de verano \(20 días\) con cuotas de octubre/i,
+        ),
+      ]),
+    )
+  })
+
+  it('shows a single unlabeled excess line when only one mixto season overflows', () => {
+    const input = {
+      ...createEmptyInput(),
+      tariffCode: '1B' as const,
+      summerStartMonth: 4 as const,
+      billingCycle: 'bimestral' as const,
+      previousCutoffDate: '2026-08-21',
+      nextCutoffDate: '2026-10-20',
+    }
+
+    // 360 kWh → 240 summer / 120 standard; only standard exceeds prorated cupos.
+    const bill = estimateDomesticBill(input, 360)
+    const excess = bill.lines.filter((line) => line.key === 'excedente')
+
+    expect(excess).toHaveLength(1)
+    expect(excess[0]).toMatchObject({
+      label: 'Tarifa 1B Excedente',
+      kwh: 3.333,
+      rate: 4.054,
+    })
+  })
+
+  it('splits mixto excess across summer and standard when rates differ', () => {
+    const input = {
+      ...createEmptyInput(),
+      tariffCode: '1B' as const,
+      summerStartMonth: 4 as const,
+      billingCycle: 'bimestral' as const,
+      previousCutoffDate: '2026-08-21',
+      nextCutoffDate: '2026-10-20',
+    }
+
+    // 600 kWh → 400 summer / 200 standard; both seasons hit excess at Sep vs Oct rates.
+    const bill = estimateDomesticBill(input, 600)
+    const excess = bill.lines.filter((line) => line.key === 'excedente')
+
+    expect(excess).toEqual([
+      expect.objectContaining({
+        label: 'Tarifa 1B Excedente (verano)',
+        kwh: 100,
+        rate: 4.041,
+      }),
+      expect.objectContaining({
+        label: 'Tarifa 1B Excedente (estándar)',
+        kwh: 83.333,
+        rate: 4.054,
+      }),
+    ])
+  })
+
+  it('uses October non-summer rates for a monthly October 20 exit bill', () => {
+    const input = {
+      ...createEmptyInput(),
+      tariffCode: '1B' as const,
+      summerStartMonth: 4 as const,
+      billingCycle: 'mensual' as const,
+      previousCutoffDate: '2026-09-20',
+      nextCutoffDate: '2026-10-20',
+    }
+
+    const bill = estimateDomesticBill(input, 100)
+
+    expect(bill.seasonMode).toBe('fuera')
+    expect(bill.rateMonth).toBe(10)
+    expect(bill.lines[0]).toMatchObject({ key: 'basico', kwh: 75, rate: 1.14 })
+  })
+})
+
+describe('allowance period scaling', () => {
+  it('keeps official monthly cupos exact and derives daily / bimonthly without round-trip error', () => {
+    expect(scaleMonthlyAllowanceKwh(100, 'monthly')).toBe(100)
+    expect(scaleMonthlyAllowanceKwh(100, 'bimonthly')).toBe(200)
+    expect(scaleMonthlyAllowanceKwh(100, 'daily')).toBeCloseTo(100 / 30, 10)
+
+    expect(scaleMonthlyAllowanceKwh(400, 'monthly')).toBe(400)
+    expect(scaleMonthlyAllowanceKwh(400, 'bimonthly')).toBe(800)
+    expect(scaleMonthlyAllowanceKwh(400, 'daily')).toBeCloseTo(400 / 30, 10)
+
+    // Observed usage stays daily-native.
+    expect(scaleDailyUsageKwh(12.5, 'daily')).toBe(12.5)
+    expect(scaleDailyUsageKwh(12.5, 'monthly')).toBe(375)
+    expect(scaleDailyUsageKwh(12.5, 'bimonthly')).toBe(750)
+  })
+
+  it('scales mixto period totals against the actual period length', () => {
+    expect(scalePeriodAllowanceKwh(600, 60, 'daily')).toBe(10)
+    expect(scalePeriodAllowanceKwh(600, 60, 'monthly')).toBe(300)
+    expect(scalePeriodAllowanceKwh(600, 60, 'bimonthly')).toBe(600)
+  })
+
+  it('splits period kWh by summer day share and conserves the total', () => {
+    const split = splitPeriodKwhBySeasonDays(300, 41, 60)
+    expect(split).toEqual({
+      summerKwh: 205,
+      nonSummerKwh: 95,
+      nonSummerDays: 19,
+    })
+    expect(split.summerKwh + split.nonSummerKwh).toBe(300)
+  })
 })
 
 describe('daily allowance comparison', () => {
-  it('converts 1B summer bimestral blocks into daily cumulative thresholds', () => {
-    // 125 + 100 monthly → ×2 for bimestre → /60 days = 4.167 + 3.333 = 7.5
+  it('stores 1B summer blocks as official monthly cumulative thresholds', () => {
     const profile = buildDailyAllowanceProfile('1B', 'verano', 2, 60, 7, 2026)
-    expect(profile.bands.map((band) => [band.key, band.bandDailyKwh, band.cumulativeDailyKwh])).toEqual([
-      ['basico', 4.167, 4.167],
-      ['intermedio', 3.333, 7.5],
+    expect(profile.bands.map((band) => [band.key, band.bandMonthlyKwh, band.cumulativeMonthlyKwh])).toEqual([
+      ['basico', 125, 125],
+      ['intermedio', 100, 225],
     ])
-    expect(profile.subsidizedCeilingDailyKwh).toBe(7.5)
+    expect(profile.subsidizedCeilingMonthlyKwh).toBe(225)
     expect(profile.bands[0]!.ratePerKwh).toBe(1.01)
     expect(profile.bands[1]!.ratePerKwh).toBe(1.171)
     expect(profile.excedenteRatePerKwh).toBe(4.016)
   })
 
-  it('uses smaller 1B non-summer daily ceilings', () => {
+  it('uses smaller 1B non-summer monthly ceilings', () => {
     const profile = buildDailyAllowanceProfile('1B', 'fuera', 2, 60, 7, 2026)
-    expect(profile.bands.map((band) => [band.key, band.cumulativeDailyKwh])).toEqual([
-      ['basico', 2.5],
-      ['intermedio', 5.833],
+    expect(profile.bands.map((band) => [band.key, band.cumulativeMonthlyKwh])).toEqual([
+      ['basico', 75],
+      ['intermedio', 175],
     ])
   })
 
-  it('keeps separate summer and non-summer profiles for mixto periods', () => {
+  it('builds separate summer and standard profiles for mixto periods', () => {
     const input = {
       ...createEmptyInput(),
       tariffCode: '1B' as const,
@@ -171,13 +339,83 @@ describe('daily allowance comparison', () => {
     expect(comparison.applicable).toBe(true)
     expect(comparison.mode).toBe('mixto')
     expect(comparison.profiles).toHaveLength(2)
-    expect(comparison.profiles.map((profile) => profile.season)).toEqual(['fuera', 'verano'])
-    // Each half uses monthly blocks over 30 days.
-    expect(comparison.profiles[0]!.subsidizedCeilingDailyKwh).toBeCloseTo(175 / 30, 3)
-    expect(comparison.profiles[1]!.subsidizedCeilingDailyKwh).toBeCloseTo(225 / 30, 3)
-    expect(comparison.guidance).toMatch(/Periodo mixto/i)
-    expect(comparison.profiles[0]!.excedenteRatePerKwh).toBeGreaterThan(0)
-    expect(comparison.profiles[1]!.excedenteRatePerKwh).toBeGreaterThan(0)
+    expect(comparison.profiles.map((profile) => profile.season)).toEqual(['verano', 'fuera'])
+    // 45 summer / 15 non-summer days → 562.5 / 187.5 kWh at 12.5 kWh/day over 60 days.
+    expect(comparison.mixedPeriod).toEqual({
+      periodDays: 60,
+      summerDays: 45,
+      nonSummerDays: 15,
+      summerKwh: 562.5,
+      nonSummerKwh: 187.5,
+      summerRange: { startISO: '2026-05-01', endISO: '2026-06-14' },
+      nonSummerRange: { startISO: '2026-04-16', endISO: '2026-04-30' },
+    })
+
+    const summer = comparison.profiles[0]!
+    const standard = comparison.profiles[1]!
+    // Day-prorated cupos: summer 125·45/30 + 100·45/30; standard 75·15/30 + 100·15/30.
+    expect(summer.bands.map((band) => [band.key, band.bandMonthlyKwh, band.usedKwh])).toEqual([
+      ['basico', 187.5, 187.5],
+      ['intermedio', 150, 150],
+    ])
+    expect(summer.subsidizedCeilingMonthlyKwh).toBe(337.5)
+    expect(summer.excessUsedKwh).toBe(225)
+    expect(summer.bands.every((band) => band.ratePerKwh != null)).toBe(true)
+
+    expect(standard.bands.map((band) => [band.key, band.bandMonthlyKwh, band.usedKwh])).toEqual([
+      ['basico', 37.5, 37.5],
+      ['intermedio', 50, 50],
+    ])
+    expect(standard.subsidizedCeilingMonthlyKwh).toBe(87.5)
+    expect(standard.excessUsedKwh).toBe(100)
+    expect(standard.bands.every((band) => band.ratePerKwh != null)).toBe(true)
+
+    const totalUsed =
+      summer.bands.reduce((sum, band) => sum + (band.usedKwh ?? 0), 0) +
+      (summer.excessUsedKwh ?? 0) +
+      standard.bands.reduce((sum, band) => sum + (band.usedKwh ?? 0), 0) +
+      (standard.excessUsedKwh ?? 0)
+    expect(totalUsed).toBeCloseTo(750, 6)
+
+    expect(comparison.guidance).toMatch(/45 días de verano \(562\.5 kWh\)/i)
+    expect(comparison.guidance).toMatch(/15 fuera de verano \(187\.5 kWh\)/i)
+    expect(comparison.guidance).toMatch(/Verano:/i)
+    expect(comparison.guidance).toMatch(/Fuera de verano:/i)
+  })
+
+  it('counts Sep 1–30 as summer for an Aug 31–Oct 30 exit period', () => {
+    const input = {
+      ...createEmptyInput(),
+      tariffCode: '1B' as const,
+      summerStartMonth: 4 as const,
+      billingCycle: 'bimestral' as const,
+      previousCutoffDate: '2026-08-31',
+      nextCutoffDate: '2026-10-30',
+    }
+    const comparison = buildDailyAllowanceComparison(input, 6.45, 60, 'mixto', 9, 2026)
+    expect(comparison.mixedPeriod).toEqual({
+      periodDays: 60,
+      summerDays: 30,
+      nonSummerDays: 30,
+      summerKwh: 193.5,
+      nonSummerKwh: 193.5,
+      summerRange: { startISO: '2026-09-01', endISO: '2026-09-30' },
+      nonSummerRange: { startISO: '2026-10-01', endISO: '2026-10-30' },
+    })
+    expect(comparison.mixedPeriod!.summerDays + comparison.mixedPeriod!.nonSummerDays).toBe(60)
+
+    const summer = comparison.profiles.find((profile) => profile.season === 'verano')!
+    const standard = comparison.profiles.find((profile) => profile.season === 'fuera')!
+    expect(summer.bands.map((band) => [band.key, band.bandMonthlyKwh, band.usedKwh])).toEqual([
+      ['basico', 125, 125],
+      ['intermedio', 100, 68.5],
+    ])
+    expect(summer.excessUsedKwh).toBe(0)
+    expect(standard.bands.map((band) => [band.key, band.bandMonthlyKwh, band.usedKwh])).toEqual([
+      ['basico', 75, 75],
+      ['intermedio', 100, 100],
+    ])
+    expect(standard.excessUsedKwh).toBe(18.5)
   })
 
   it('includes intermediate low/high bands for 1C summer', () => {
@@ -187,7 +425,7 @@ describe('daily allowance comparison', () => {
       'intermedioBajo',
       'intermedioAlto',
     ])
-    expect(profile.subsidizedCeilingDailyKwh).toBe(15) // 450 / 30
+    expect(profile.subsidizedCeilingMonthlyKwh).toBe(450)
     expect(profile.bands.map((band) => band.ratePerKwh)).toEqual([1.01, 1.171, 1.505])
   })
 
@@ -200,8 +438,25 @@ describe('daily allowance comparison', () => {
     }
     const comparison = buildDailyAllowanceComparison(input, 12.5, 60, 'verano', 7, 2026)
     expect(comparison.guidance).toMatch(/Excedente/i)
-    expect(comparison.guidance).toMatch(/12\.5/)
+    expect(comparison.guidance).toMatch(/12\.5 kWh\/día/)
     expect(comparison.profiles[0]!.excedenteRatePerKwh).toBe(4.016)
+  })
+
+  it('scales allowance guidance for monthly and bimonthly display', () => {
+    const input = {
+      ...createEmptyInput(),
+      tariffCode: '1B' as const,
+      summerStartMonth: 5 as const,
+      billingCycle: 'bimestral' as const,
+    }
+    const comparison = buildDailyAllowanceComparison(input, 12.5, 60, 'verano', 7, 2026)
+    expect(formatAllowanceGuidance(comparison, 'es', 'daily')).toMatch(/12\.5 kWh\/día/)
+    expect(formatAllowanceGuidance(comparison, 'es', 'monthly')).toMatch(/375 kWh\/mes/)
+    expect(formatAllowanceGuidance(comparison, 'es', 'bimonthly')).toMatch(/750 kWh\/bimestre/)
+    expect(formatAllowanceGuidance(comparison, 'en', 'monthly')).toMatch(/375 kWh\/month/)
+    // Excess is derived from exact monthly cupos (375 − 225), not rounded daily × 30.
+    expect(formatAllowanceGuidance(comparison, 'es', 'monthly')).toMatch(/150 kWh\/mes/)
+    expect(formatAllowanceGuidance(comparison, 'es', 'bimonthly')).toMatch(/300 kWh\/bimestre/)
   })
 
   it('returns a non-applicable DAC explanation without inventing blocks', () => {
@@ -233,11 +488,10 @@ describe('daily allowance comparison', () => {
     expect(issues).toHaveLength(0)
     expect(estimate!.dailyAllowance.applicable).toBe(true)
     expect(estimate!.dailyAllowance.averageDailyKwh).toBe(12.5)
-    expect(estimate!.dailyAllowance.profiles[0]!.subsidizedCeilingDailyKwh).toBe(7.5)
+    expect(estimate!.dailyAllowance.profiles[0]!.subsidizedCeilingMonthlyKwh).toBe(225)
     expect(estimate!.dailyAllowance.profiles[0]!.bands[0]!.ratePerKwh).toBe(1.01)
     expect(estimate!.dailyAllowance.profiles[0]!.excedenteRatePerKwh).toBe(4.016)
     expect(estimate!.dailyAllowance.dacLimitKwhMonth).toBe(400)
-    expect(estimate!.dailyAllowance.dacLimitDailyKwh).toBe(dacLimitDailyFromMonthly(400))
     expect(estimate!.dailyAllowance.currentPaceAboveDacLimit).toBe(false)
   })
 })
@@ -355,7 +609,7 @@ describe('DAC history averaging', () => {
     )
   })
 
-  it('includes DAC daily threshold on the allowance comparison', () => {
+  it('includes exact DAC monthly threshold on the allowance comparison', () => {
     const input = {
       ...createEmptyInput(),
       tariffCode: '1B' as const,
@@ -364,7 +618,7 @@ describe('DAC history averaging', () => {
     }
     // 15 kWh/day → 450 kWh/mes > 400 limit
     const comparison = buildDailyAllowanceComparison(input, 15, 60, 'verano', 7, 2026)
-    expect(comparison.dacLimitDailyKwh).toBeCloseTo(13.333, 3)
+    expect(comparison.dacLimitKwhMonth).toBe(400)
     expect(comparison.currentPaceAboveDacLimit).toBe(true)
   })
 })

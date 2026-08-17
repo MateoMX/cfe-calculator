@@ -1,0 +1,269 @@
+@media (max-width: 720px) {
+  :root {
+    background: var(--surface);
+  }
+
+  body {
+    min-height: 100dvh;
+    background: var(--surface);
+  }
+
+  #root {
+    min-height: 100dvh;
+  }
+
+  .m-app {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    height: 100svh;
+    max-height: 100dvh;
+    max-height: 100svh;
+    overflow: hidden;
+    background: var(--surface);
+    padding-top: env(safe-area-inset-top, 0);
+  }
+
+  .m-app-bar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 3.25rem;
+    padding: 0.55rem 0.9rem;
+    background: rgba(255, 255, 255, 0.92);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .m-app-bar-leading {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .m-app-bar-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .m-back-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    margin-left: -0.35rem;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
+    flex: 0 0 auto;
+  }
+
+  .m-back-button:hover,
+  .m-back-button:focus-visible {
+    background: var(--soft);
+    outline: none;
+  }
+
+  .m-back-button svg {
+    width: 1.35rem;
+    height: 1.35rem;
+  }
+
+  .m-app .language-trigger {
+    min-height: 2.5rem;
+    padding: 0.45rem 0.65rem;
+    border-radius: 12px;
+  }
+
+  .m-screens {
+    flex: 1 1 auto;
+    overflow: hidden;
+    min-height: 0;
+    /* Prevent accidental horizontal scrolling of the slide viewport. */
+    overscroll-behavior-x: none;
+  }
+
+  .m-screen-track {
+    display: flex;
+    width: 200%;
+    height: 100%;
+    transform: translateX(0);
+    transition: transform 0.28s ease;
+  }
+
+  .m-screen-track--result {
+    transform: translateX(-50%);
+  }
+
+  .m-screen {
+    width: 50%;
+    height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    padding: 0.85rem 0.9rem calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .m-intro {
+    margin-bottom: 0.85rem;
+  }
+
+  .m-intro p {
+    margin: 0 0 0.65rem;
+    color: var(--muted);
+    font-size: 0.95rem;
+    line-height: 1.45;
+  }
+
+  .m-privacy-note {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    margin: 0 !important;
+    font-size: 0.88rem !important;
+  }
+
+  .m-footer {
+    margin: 1rem 0 0;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+
+  .m-app .card,
+  .m-app .form {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: 0;
+  }
+
+  .m-app .form fieldset,
+  .m-app .form .expert-section {
+    border-radius: 16px;
+    background: var(--soft);
+  }
+
+  .m-app .form input[type='number'],
+  .m-app .form input[type='date'],
+  .m-app .form input[type='text'],
+  .m-app .form select,
+  .m-app .form .expert-switch {
+    min-height: 2.75rem;
+    font-size: 16px;
+  }
+
+  .m-app .form input[type='number'],
+  .m-app .form input[type='date'],
+  .m-app .form input[type='text'],
+  .m-app .form select {
+    border-radius: 12px;
+    padding: 0.8rem 0.85rem;
+  }
+
+  .m-app .bill-example-info {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .m-app .result {
+    padding-bottom: 0.5rem;
+  }
+
+  .m-app .stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .m-action-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 25;
+    padding: 0.75rem 0.9rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    background: rgba(255, 255, 255, 0.96);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -8px 24px rgba(20, 33, 61, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .m-action-button {
+    width: 100%;
+    min-height: 3rem;
+    border-radius: 14px;
+    font-size: 1.05rem;
+  }
+
+  .m-app .bill-example-dialog {
+    width: 100%;
+    max-height: min(92dvh, 900px);
+    border-radius: 18px 18px 0 0;
+    margin-top: auto;
+  }
+
+  .m-app .bill-example-root {
+    align-items: end;
+    padding: 0;
+  }
+
+  .m-app--tariffs {
+    overflow: hidden;
+  }
+
+  .m-tariffs-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .m-app-bar .app-nav {
+    flex: 0 0 auto;
+  }
+
+  .m-app-bar .app-nav-trigger {
+    width: 2.5rem;
+    height: 2.5rem;
+    margin-left: -0.2rem;
+  }
+
+  .m-app--tariffs .tariff-page--compact .card {
+    box-shadow: none;
+    border-radius: 14px;
+  }
+
+  .m-app--tariffs .tariff-controls-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .m-app--tariffs .tariff-select-field--year {
+    max-width: none;
+  }
+
+  .m-app--tariffs .tariff-breakdown-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .m-app--tariffs .tariff-season-grid {
+    grid-template-columns: 1fr;
+  }
+}
