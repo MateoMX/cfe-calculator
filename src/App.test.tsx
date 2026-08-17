@@ -725,7 +725,7 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: /Consulta de tarifas CFE/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /Estado de los datos/i })).toBeInTheDocument()
     expect(screen.getByText(/Última verificación/i)).toBeInTheDocument()
-    expect(screen.getByText(/16 de julio de 2026/i)).toBeInTheDocument()
+    expect(screen.getByText(/17 de agosto de 2026/i)).toBeInTheDocument()
     expect(screen.getByText(/Datos disponibles/i)).toBeInTheDocument()
     expect(screen.getByText(/1 de enero de 2026 – 31 de diciembre de 2026/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/Año de las tarifas/i)).toHaveValue('2026')
@@ -778,7 +778,7 @@ describe('App', () => {
     expect(screen.getByLabelText(/Año de las tarifas/i)).toHaveValue('2026')
     expect(screen.getByText(/Energía \(verano\)/i)).toBeInTheDocument()
     expect(screen.getByText(/Energía \(fuera de verano\)/i)).toBeInTheDocument()
-    expect(screen.getByText(/1 de enero de 2026 – 31 de julio de 2026/i)).toBeInTheDocument()
+    expect(screen.getByText(/1 de enero de 2026 – 31 de agosto de 2026/i)).toBeInTheDocument()
     expect(screen.queryByLabelText(/Tarifa doméstica normal/i)).not.toBeInTheDocument()
 
     await user.selectOptions(screen.getByLabelText(/Mes del desglose/i), '1')
@@ -805,7 +805,7 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: /CFE tariff reference/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /Data status/i })).toBeInTheDocument()
     expect(screen.getByText(/Last data check/i)).toBeInTheDocument()
-    expect(screen.getByText(/16 July 2026/i)).toBeInTheDocument()
+    expect(screen.getByText(/17 August 2026/i)).toBeInTheDocument()
     expect(screen.getByText(/Available data range/i)).toBeInTheDocument()
     expect(screen.getByText(/1 January 2026 – 31 December 2026/i)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /^Menu$/i }))
@@ -841,7 +841,7 @@ describe('App', () => {
 
     const headingMonth = screen.getByLabelText(/Mes del desglose/i)
     const headingYear = screen.getByLabelText(/Año de las tarifas/i)
-    expect(headingMonth).toHaveValue('7')
+    expect(headingMonth).toHaveValue('8')
     expect(headingYear).toHaveValue('2026')
     expect(headingYear).toHaveAccessibleDescription(
       /Cuando CFE publique datos del año siguiente/i,
@@ -869,7 +869,7 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: /Consulta de tarifas CFE/i })).toBeInTheDocument()
     expect(document.querySelector('.m-app--tariffs')).toBeTruthy()
     expect(screen.getByRole('heading', { name: /Estado de los datos/i })).toBeInTheDocument()
-    expect(screen.getByText(/16 de julio de 2026/i)).toBeInTheDocument()
+    expect(screen.getByText(/17 de agosto de 2026/i)).toBeInTheDocument()
     expect(screen.getByText(/1 de enero de 2026 – 31 de diciembre de 2026/i)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /^Menú$/i }))
     expect(screen.getByRole('menuitem', { name: /Calculadora/i })).toBeInTheDocument()

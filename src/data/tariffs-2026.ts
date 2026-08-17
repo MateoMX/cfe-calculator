@@ -9,7 +9,7 @@ import type {
 } from '../domain/types'
 
 export const TARIFF_SNAPSHOT_META: TariffSnapshotMeta = {
-  asOf: '2026-07-16',
+  asOf: '2026-08-17',
   year: 2026,
   sourceName: 'CFE Tarifas Hogar / Oficios SHCP 349-B-1-070 y DAC mensuales',
   sourceUrl: 'https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/',
@@ -19,10 +19,10 @@ export const TARIFF_SNAPSHOT_META: TariffSnapshotMeta = {
     'https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Tarifas/TarifaDAC.aspx',
   manualUrl: 'http://www.diputados.gob.mx/LeyesBiblio/regla/n365.pdf',
   notes: [
-    'Última actualización: 16 de julio de 2026. Las tarifas son correctas a esta fecha.',
-    'Los bloques mensuales provienen del esquema oficial de tarifas domésticas 1–1F.',
-    'Las cuotas 1B de julio 2026 (verano) se verificaron en el portal CFE: básico 1.010, intermedio 1.171, excedente 4.016.',
-    'DAC: cuotas regionales oficiales mes a mes (enero–julio 2026) del portal CFE / oficios SHCP; julio = Oficio 349-B-1-069.',
+    'Última actualización: 17 de agosto de 2026. Las tarifas son correctas a esta fecha.',
+    'Los bloques mensuales y las cuotas domésticas 1–1F de 2026 provienen del Oficio SHCP 349-B-1-070 (TFSB / Factor de Ajuste). El 17 de agosto de 2026 se descargaron del portal CFE las páginas Tarifa 1 y 1A–1F (12 meses; verano y fuera) y las seis regiones DAC.',
+    'Verano doméstico: el portal publica cuotas de verano para febrero–octubre cuando el mes de inicio de verano cae en esa ventana (inicios oficiales 2–5). Enero, noviembre y diciembre no pueden ser verano con ese esquema.',
+    'DAC: cuotas regionales oficiales mes a mes (enero–agosto 2026) del portal CFE / oficios SHCP; agosto = Oficio 349-B-1-078. Septiembre aparece en el selector del portal pero aún no publica tablas de cuotas.',
     'El verano local es de seis meses consecutivos a partir del mes de inicio fijado para la localidad.',
     'En periodos bimestrales mixtos, el consumo se reparte por días de verano y fuera de verano; cada fracción se cobra con los cupos mensuales oficiales de esa temporada (supuesto documentado; el Manual no detalla el reparto exacto del kWh agregado).',
   ],
@@ -48,11 +48,12 @@ const EXCESS_COMMON = monthlySeries([
   3.944, 3.956, 3.968, 3.98, 3.992, 4.004, 4.016, 4.028, 4.041, 4.054, 4.067, 4.08,
 ])
 
+/** Summer $/kWh for 1A–1D. Feb–Oct are published; Jan/Nov/Dec cannot fall in a Feb–May summer window. */
 const SUMMER_BASIC_1A_1D = monthlySeries([
   BASIC_COMMON[1],
-  BASIC_COMMON[2],
-  BASIC_COMMON[3],
-  BASIC_COMMON[4],
+  0.995,
+  0.998,
+  1.001,
   1.004,
   1.007,
   1.01,
@@ -64,9 +65,9 @@ const SUMMER_BASIC_1A_1D = monthlySeries([
 ])
 const SUMMER_INTER_1A_1D = monthlySeries([
   INTER_COMMON[1],
-  INTER_COMMON[2],
-  INTER_COMMON[3],
-  INTER_COMMON[4],
+  1.151,
+  1.155,
+  1.159,
   1.163,
   1.167,
   1.171,
@@ -77,13 +78,14 @@ const SUMMER_INTER_1A_1D = monthlySeries([
   INTER_COMMON[12],
 ])
 const SUMMER_HIGH_1C_1D = monthlySeries([
-  0, 0, 0, 0, 1.495, 1.5, 1.505, 1.51, 1.515, 1.52, 0, 0,
+  0, 1.48, 1.485, 1.49, 1.495, 1.5, 1.505, 1.51, 1.515, 1.52, 0, 0,
 ])
 
+/** Summer $/kWh for 1E–1F (Feb–Oct published). */
 const SUMMER_BASIC_1E_1F = monthlySeries([
   BASIC_COMMON[1],
-  BASIC_COMMON[2],
-  BASIC_COMMON[3],
+  0.83,
+  0.833,
   0.836,
   0.839,
   0.842,
@@ -96,8 +98,8 @@ const SUMMER_BASIC_1E_1F = monthlySeries([
 ])
 const SUMMER_LOW_1E_1F = monthlySeries([
   INTER_COMMON[1],
-  INTER_COMMON[2],
-  INTER_COMMON[3],
+  1.03,
+  1.033,
   1.036,
   1.039,
   1.042,
@@ -109,10 +111,10 @@ const SUMMER_LOW_1E_1F = monthlySeries([
   INTER_COMMON[12],
 ])
 const SUMMER_HIGH_1E = monthlySeries([
-  0, 0, 0, 1.344, 1.348, 1.352, 1.356, 1.36, 1.364, 1.368, 0, 0,
+  0, 1.336, 1.34, 1.344, 1.348, 1.352, 1.356, 1.36, 1.364, 1.368, 0, 0,
 ])
 const SUMMER_HIGH_1F = monthlySeries([
-  0, 0, 0, 2.518, 2.526, 2.534, 2.542, 2.55, 2.558, 2.566, 0, 0,
+  0, 2.502, 2.51, 2.518, 2.526, 2.534, 2.542, 2.55, 2.558, 2.566, 0, 0,
 ])
 
 function blocks(
@@ -376,7 +378,14 @@ type DacMonthRow = {
 /**
  * Official monthly DAC schedules from the CFE Tarifa DAC portal
  * (section 6.- Cuotas aplicables) and matching SHCP monthly oficios.
- * Only months with published values are included (Jan–Jul 2026 as of asOf).
+ *
+ * How to refresh: open dacUrl, choose year, then a month in section 6.
+ * CFE renders two tables — Baja California / Baja California Sur (summer +
+ * non-summer energy) and the other regions (summer energy only, national
+ * fixed charge). Copy those numbers into a new row below. The month dropdown
+ * can list a future month before cuotas exist; skip any month whose tables
+ * are empty. Cross-check the matching “Oficio SHCP … Tarifa DAC {mes} {año}”
+ * PDF on agreementsUrl. Only months with published values belong here.
  */
 const DAC_MONTH_ROWS: DacMonthRow[] = [
   {
@@ -461,6 +470,18 @@ const DAC_MONTH_ROWS: DacMonthRow[] = [
       { regionId: 'norte-noreste', regionName: 'Norte y Noreste', energySummer: 6.127, energyNonSummer: null },
       { regionId: 'sur-peninsular', regionName: 'Sur y Peninsular', energySummer: 6.225, energyNonSummer: null },
       { regionId: 'central', regionName: 'Central', energySummer: 6.713, energyNonSummer: null },
+    ],
+  },
+  {
+    month: 8,
+    fixedCharge: 145.04,
+    regions: [
+      { regionId: 'baja-california', regionName: 'Baja California', energySummer: 6.447, energyNonSummer: 5.536 },
+      { regionId: 'baja-california-sur', regionName: 'Baja California Sur', energySummer: 7.025, energyNonSummer: 5.536 },
+      { regionId: 'noroeste', regionName: 'Noroeste', energySummer: 6.211, energyNonSummer: null },
+      { regionId: 'norte-noreste', regionName: 'Norte y Noreste', energySummer: 6.051, energyNonSummer: null },
+      { regionId: 'sur-peninsular', regionName: 'Sur y Peninsular', energySummer: 6.148, energyNonSummer: null },
+      { regionId: 'central', regionName: 'Central', energySummer: 6.63, energyNonSummer: null },
     ],
   },
 ]

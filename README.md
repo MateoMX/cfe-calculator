@@ -54,23 +54,59 @@ npm run preview
 
 ## Fuentes de datos
 
-Fotografía estática vigente al **16 de julio de 2026**:
+La app no consulta CFE en tiempo de ejecución: guarda una **fotografía estática** en `src/data/tariffs-YYYY.ts`. Vigente al **17 de agosto de 2026**.
 
-- [CFE Tarifas Hogar](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/)
-- [Tarifa DAC (CFE)](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Tarifas/TarifaDAC.aspx) (definición de Consumo Mensual Promedio y límites)
-- [Acuerdos / oficios SHCP en CFE](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Acuerdos/AcuerdosCasa.aspx) (p. ej. 349-B-1-070 y oficios DAC mensuales)
-- [Manual de disposiciones de facturación (DOF)](http://www.diputados.gob.mx/LeyesBiblio/regla/n365.pdf)
+Fuentes oficiales (únicas que deben usarse para actualizar):
 
-Las cuotas 1B de julio 2026 (verano) se verificaron en el portal CFE: básico `1.010`, intermedio `1.171`, excedente `4.016`.
+| Qué | Dónde | Cadencia |
+| --- | --- | --- |
+| Cuotas domésticas 1, 1A–1F (bloques y precios de todo el año) | Una página por tarifa en el portal: [1](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Tarifas/Tarifa1.aspx), [1A](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Tarifas/Tarifa1A.aspx), [1B](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Tarifas/Tarifa1B.aspx), [1C](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Tarifas/Tarifa1C.aspx), [1D](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Tarifas/Tarifa1D.aspx), [1E](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Tarifas/Tarifa1E.aspx), [1F](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Tarifas/Tarifa1F.aspx). El oficio **TFSB Domésticas y Factor de Ajuste** en [Acuerdos SHCP](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Acuerdos/AcuerdosCasa.aspx) (2026: Oficio 349-B-1-070) publica los 12 meses | Una vez al año (el oficio trae los 12 meses); hay que bajar **las siete** páginas, no solo 1B |
+| Cuotas DAC de las **seis regiones** (cargo fijo + energía) | [Tarifa DAC](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Tarifas/TarifaDAC.aspx) sección **6.- Cuotas aplicables**, y el oficio **Tarifa DAC {mes} {año}** en Acuerdos SHCP (agosto 2026: Oficio 349-B-1-078) | Cada mes |
+| Límites de alto consumo (kWh/mes que disparan DAC) | Misma página Tarifa DAC, tabla de límites por tarifa 1–1F | Casi no cambian de un año a otro |
+| Reglas de facturación (verano, mixto, mínimo, IVA) | [Manual de disposiciones (DOF)](http://www.diputados.gob.mx/LeyesBiblio/regla/n365.pdf) | Rara vez |
 
-Las cuotas DAC se publican **mes a mes por región** (cargo fijo nacional + energía de verano; Baja California y Baja California Sur también publican fuera de verano). El archivo `tariffs-2026.ts` incluye los meses oficiales disponibles (enero–julio 2026 al `asOf` actual). La calculadora usa el mes DAC más reciente publicado; la página de consulta permite elegir mes/año.
+Verificación de esta fotografía (portal CFE, 17 de agosto de 2026), **todas** las tarifas domésticas y las seis regiones DAC:
+
+- Tarifa 1 agosto: básico `1.132`, intermedio `1.377`, excedente `4.028` (igual los 12 meses frente a las series del TFSB).
+- 1A y 1B agosto (verano): básico `1.013`, intermedio `1.175`, excedente `4.028`.
+- 1C y 1D agosto (verano): básico `1.013`, intermedio bajo `1.175`, intermedio alto `1.510`, excedente `4.028`.
+- 1E agosto (verano): básico `0.848`, intermedio bajo `1.048`, intermedio alto `1.360`, excedente `4.028`.
+- 1F agosto (verano): básico `0.848`, intermedio bajo `1.048`, intermedio alto `2.550`, excedente `4.028`.
+- Verano febrero–abril (hay que elegir ese mes como inicio de verano en el portal; con inicio en mayo no aparecen): p. ej. 1B abril `1.001` / `1.159`; 1C marzo intermedio alto `1.485`; 1E febrero `0.830` / `1.030` / `1.336`.
+- DAC agosto, las seis regiones: cargo fijo `145.04`; Central `6.630`; Baja California `6.447` / `5.536`; Baja California Sur `7.025` / `5.536`; Noroeste `6.211`; Norte y Noreste `6.051`; Sur y Peninsular `6.148`. Febrero–julio coinciden con la fotografía previa.
+
+Las cuotas domésticas 2026 ya cubren enero–diciembre. Las cuotas DAC publicadas van de **enero a agosto de 2026**. El selector del portal puede listar septiembre, pero las tablas de cuotas siguen vacías: no se incluye ese mes. La calculadora usa el mes DAC más reciente publicado; la página de consulta permite elegir mes/año.
+
+### Cómo leer las tablas DAC en el portal
+
+1. Abre [Tarifa DAC](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Tarifas/TarifaDAC.aspx).
+2. Elige el año y, en **6.- Cuotas aplicables**, el mes. CFE es un formulario ASP.NET: hay que seleccionar el mes para que aparezcan las tablas.
+3. CFE muestra **dos tablas**:
+   - Baja California y Baja California Sur: cargo fijo ($/mes) + energía verano + energía fuera de verano.
+   - Central, Noroeste, Norte y Noreste, Sur y Peninsular: el mismo cargo fijo nacional + solo energía de verano (`energyNonSummer = null`).
+4. Confirma el oficio del mismo mes en [Acuerdos SHCP](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCRECasa/Acuerdos/AcuerdosCasa.aspx) (`Oficio SHCP … Tarifa DAC {mes} {año}`).
+5. **No copies un mes** si el desplegable lo lista pero las tablas salen vacías (eso pasó con septiembre 2026 al `asOf` actual).
+
+### Cómo leer las cuotas domésticas (las siete tarifas)
+
+No basta con Tarifa 1B. Hay una URL por código; hay que repetir el procedimiento en cada una:
+
+1. Abre la página de esa tarifa (`Tarifa1.aspx`, `Tarifa1A.aspx`, … `Tarifa1F.aspx`).
+2. Elige año  y mes de consulta. En 1A–1F también elige un **mes de inicio de verano**:
+   - Inicio en mayo cubre mayo–octubre (verano) y el resto como fuera de verano.
+   - Para febrero, marzo o abril de verano hay que poner ese mismo mes como inicio; si dejas mayo, CFE muestra las cuotas de fuera de verano.
+3. Anota básico / intermedio (o intermedio bajo/alto en 1C–1F verano) / excedente y los cupos de kWh del mismo texto.
+4. Tarifa 1 no tiene verano: solo mes de consulta.
+5. El oficio TFSB del año suele publicar los 12 meses de una vez; un mes nuevo en el selector no implica un ajuste si ese oficio no cambió.
+
+La misma lista de fuentes aparece en la calculadora y en `#/tariffs`.
 
 ## Limitaciones
 
 - No afiliado a CFE. El aviso-recibo oficial prevalece.
 - CFE asigna tarifa y verano por **localidad**; no publica un catálogo completo abierto. Por eso la herramienta pide confirmar tarifa y mes de inicio de verano con tu recibo.
 - DAP, adeudos, créditos y convenios municipales no se estiman automáticamente (puedes capturar un cargo opcional conocido).
-- Los precios cambian mensualmente; actualiza a mano la fotografía del año correspondiente (por ejemplo [`src/data/tariffs-2026.ts`](src/data/tariffs-2026.ts)) y regístrala en [`src/data/tariffs.ts`](src/data/tariffs.ts). No expongas un mes DAC hasta que CFE publique cuotas para ese mes.
+- Los precios DAC cambian mensualmente; las domésticas, cuando SHCP publica un nuevo TFSB. Actualiza a mano la fotografía del año correspondiente.
 
 ## Privacidad
 
@@ -78,12 +114,20 @@ Los datos del formulario no salen del navegador. No hay cookies de seguimiento n
 
 ## Actualizar tarifas
 
-### Misma anualidad (ajustes mensuales)
+Archivos: [`src/data/tariffs-2026.ts`](src/data/tariffs-2026.ts) (o `tariffs-YYYY.ts`) y el registro en [`src/data/tariffs.ts`](src/data/tariffs.ts). `DAC_REGIONS` se deriva del último mes de `DAC_MONTHLY_SCHEDULES`; no lo edites a mano.
 
-1. Consulta el portal CFE / oficios SHCP del mes (domésticas y DAC).
-2. Actualiza bloques domésticos y añade/actualiza la fila del mes en `DAC_MONTHLY_SCHEDULES` en el archivo del año, p. ej. `src/data/tariffs-2026.ts` (mantén `DAC_REGIONS` como el mes DAC más reciente).
-3. Cambia `TARIFF_SNAPSHOT_META.asOf` (y las notas si aplica).
-4. Ejecuta `npm test` y vuelve a publicar.
+### Misma anualidad (ajuste DAC mensual, lo más frecuente)
+
+1. Corre `npm run check:cfe-data` o espera el correo semanal del flujo CFE data watch. Un `dac_month_ahead` / `dac_oficio_ahead` significa que hay un mes DAC nuevo.
+2. En el portal DAC, selecciona ese mes y copia las dos tablas (pasos de **Cómo leer las tablas DAC**).
+3. Añade una fila en `DAC_MONTH_ROWS` de `src/data/tariffs-YYYY.ts` (mismo orden de regiones que los meses anteriores).
+4. Pon `TARIFF_SNAPSHOT_META.asOf` a la fecha de verificación y actualiza las notas (oficio, intervalo de meses DAC).
+5. Ajusta las pruebas que fijan `asOf`, meses DAC publicados y el mes más reciente (`src/data/tariffs.test.ts`, `src/domain/tariffReference.test.ts`, `src/App.test.tsx`).
+6. Ejecuta `npm test` y vuelve a publicar.
+
+### Ajuste de cuotas domésticas (mismo año)
+
+Solo si el portal o un oficio TFSB nuevo cambia precios 1–1F respecto de las series en `tariffs-YYYY.ts`. Descarga **Tarifa 1 y 1A–1F** (no solo 1B), verano y fuera, y los meses de inicio 2–5 para no perder febrero–abril de verano. Los cupos y límites DAC (`dacLimitKwhMonth`) casi no se tocan.
 
 ### Nuevo año (p. ej. cuando CFE publique 2027 antes de que expire 2026)
 
