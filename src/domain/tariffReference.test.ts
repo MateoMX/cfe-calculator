@@ -23,10 +23,17 @@ describe('tariffReference helpers', () => {
     expect(normalizePublishedRate(1.01)).toBe(1.01)
   })
 
-  it('returns published July 2026 1B summer rates and null for unavailable high-band months', () => {
+  it('returns published summer rates for 1–1F and null only outside the Feb–Oct summer window', () => {
     expect(getPublishedRate('1B', 7, 'verano', 'basico', 2026)).toBe(1.01)
     expect(getPublishedRate('1B', 7, 'verano', 'intermedio', 2026)).toBe(1.171)
+    expect(getPublishedRate('1A', 8, 'verano', 'basico', 2026)).toBe(1.013)
+    expect(getPublishedRate('1C', 8, 'verano', 'intermedioAlto', 2026)).toBe(1.51)
+    expect(getPublishedRate('1D', 4, 'verano', 'intermedioAlto', 2026)).toBe(1.49)
+    expect(getPublishedRate('1E', 8, 'verano', 'basico', 2026)).toBe(0.848)
+    expect(getPublishedRate('1F', 8, 'verano', 'intermedioAlto', 2026)).toBe(2.55)
+    expect(getPublishedRate('1', 8, 'fuera', 'basico', 2026)).toBe(1.132)
     expect(getPublishedRate('1C', 1, 'verano', 'intermedioAlto', 2026)).toBeNull()
+    expect(getPublishedRate('1C', 11, 'verano', 'intermedioAlto', 2026)).toBeNull()
     expect(getPublishedRate('1C', 7, 'verano', 'intermedioAlto', 2026)).toBe(1.505)
   })
 

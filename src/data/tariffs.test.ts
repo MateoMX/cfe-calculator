@@ -45,18 +45,74 @@ describe('tariff snapshot integrity', () => {
     expect(Object.keys(DOMESTIC_TARIFFS)).toEqual([...DOMESTIC_CODES])
   })
 
-  it('matches verified August 2026 1B summer and Tarifa 1 prices from CFE portal', () => {
-    const augustSummer = DOMESTIC_TARIFFS['1B'].monthlyRates.find(
-      (rate) => rate.month === 8 && rate.season === 'verano',
-    )
-    expect(augustSummer?.prices.basico).toBe(1.013)
-    expect(augustSummer?.prices.intermedio).toBe(1.175)
-    expect(augustSummer?.prices.excedente).toBe(4.028)
+  it('matches CFE portal August 2026 prices for every domestic tariff', () => {
+    const august = {
+      '1': { season: 'fuera' as const, prices: { basico: 1.132, intermedio: 1.377, excedente: 4.028 } },
+      '1A': { season: 'verano' as const, prices: { basico: 1.013, intermedio: 1.175, excedente: 4.028 } },
+      '1B': { season: 'verano' as const, prices: { basico: 1.013, intermedio: 1.175, excedente: 4.028 } },
+      '1C': {
+        season: 'verano' as const,
+        prices: { basico: 1.013, intermedioBajo: 1.175, intermedioAlto: 1.51, excedente: 4.028 },
+      },
+      '1D': {
+        season: 'verano' as const,
+        prices: { basico: 1.013, intermedioBajo: 1.175, intermedioAlto: 1.51, excedente: 4.028 },
+      },
+      '1E': {
+        season: 'verano' as const,
+        prices: { basico: 0.848, intermedioBajo: 1.048, intermedioAlto: 1.36, excedente: 4.028 },
+      },
+      '1F': {
+        season: 'verano' as const,
+        prices: { basico: 0.848, intermedioBajo: 1.048, intermedioAlto: 2.55, excedente: 4.028 },
+      },
+    }
 
-    const tariff1August = DOMESTIC_TARIFFS['1'].monthlyRates.find((rate) => rate.month === 8)
-    expect(tariff1August?.prices.basico).toBe(1.132)
-    expect(tariff1August?.prices.intermedio).toBe(1.377)
-    expect(tariff1August?.prices.excedente).toBe(4.028)
+    for (const code of DOMESTIC_CODES) {
+      const expected = august[code]
+      const row = DOMESTIC_TARIFFS[code].monthlyRates.find(
+        (rate) => rate.month === 8 && rate.season === expected.season,
+      )
+      expect(row?.prices, code).toMatchObject(expected.prices)
+    }
+  })
+
+  it('includes Feb–Apr summer prices that CFE only shows when that month is the summer start', () => {
+    expect(
+      DOMESTIC_TARIFFS['1A'].monthlyRates.find((rate) => rate.month === 2 && rate.season === 'verano')
+        ?.prices,
+    ).toMatchObject({ basico: 0.995, intermedio: 1.151, excedente: 3.956 })
+    expect(
+      DOMESTIC_TARIFFS['1B'].monthlyRates.find((rate) => rate.month === 4 && rate.season === 'verano')
+        ?.prices,
+    ).toMatchObject({ basico: 1.001, intermedio: 1.159, excedente: 3.98 })
+    expect(
+      DOMESTIC_TARIFFS['1C'].monthlyRates.find((rate) => rate.month === 3 && rate.season === 'verano')
+        ?.prices,
+    ).toMatchObject({
+      basico: 0.998,
+      intermedioBajo: 1.155,
+      intermedioAlto: 1.485,
+      excedente: 3.968,
+    })
+    expect(
+      DOMESTIC_TARIFFS['1E'].monthlyRates.find((rate) => rate.month === 2 && rate.season === 'verano')
+        ?.prices,
+    ).toMatchObject({
+      basico: 0.83,
+      intermedioBajo: 1.03,
+      intermedioAlto: 1.336,
+      excedente: 3.956,
+    })
+    expect(
+      DOMESTIC_TARIFFS['1F'].monthlyRates.find((rate) => rate.month === 3 && rate.season === 'verano')
+        ?.prices,
+    ).toMatchObject({
+      basico: 0.833,
+      intermedioBajo: 1.033,
+      intermedioAlto: 2.51,
+      excedente: 3.968,
+    })
   })
 
   it('keeps official monthly block allowances and DAC thresholds for every tariff', () => {
