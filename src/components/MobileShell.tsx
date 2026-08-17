@@ -15,9 +15,11 @@ interface Props {
   input: CalculatorInput
   issues: ValidationIssue[]
   estimate: FullEstimate | null
+  expertMode: boolean
   formInstanceKey?: number
   onChange: (next: CalculatorInput) => void
   onSubmit: () => void
+  onExpertModeChange: (enabled: boolean) => void
   onCopyShareLink: () => Promise<boolean>
   onNavigate: (view: AppView) => void
 }
@@ -50,9 +52,11 @@ export function MobileShell({
   input,
   issues,
   estimate,
+  expertMode,
   formInstanceKey = 0,
   onChange,
   onSubmit,
+  onExpertModeChange,
   onCopyShareLink,
   onNavigate,
 }: Props) {
@@ -177,8 +181,10 @@ export function MobileShell({
               showInlineSubmit={false}
               value={input}
               issues={issues}
+              expertMode={expertMode}
               onChange={onChange}
               onSubmit={onSubmit}
+              onExpertModeChange={onExpertModeChange}
               onCopyShareLink={onCopyShareLink}
             />
 
@@ -192,7 +198,7 @@ export function MobileShell({
             inert={screen !== 'result' ? true : undefined}
           >
             {estimate ? (
-              <EstimateResult estimate={estimate} />
+              <EstimateResult estimate={estimate} expertMode={expertMode} />
             ) : (
               <aside className="card placeholder">
                 <h2>{t('app.placeholderTitle')}</h2>

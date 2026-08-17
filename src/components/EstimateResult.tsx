@@ -1,5 +1,6 @@
 import { forwardRef } from 'react'
 import { TARIFF_SNAPSHOT_META } from '../data/tariffs'
+import { shouldMinimizeDacRisk } from '../domain/billing'
 import type { DacRisk, FullEstimate } from '../domain/types'
 import { formatKwh, formatMoney, useI18n } from '../i18n'
 import { DailyAllowanceChart } from './DailyAllowanceChart'
@@ -7,21 +8,62 @@ import { InfoPopover } from './InfoPopover'
 
 interface Props {
   estimate: FullEstimate
+  expertMode: boolean
 }
 
-function dacPanelTone(status: DacRisk['status']): string {
+function dacPanelTone(status: DacRisk['status'], minimized: boolean): string {
+  if (minimized) return 'dac-risk-panel--ok'
   if (status === 'above_limit' || status === 'already_dac') return 'dac-risk-panel--alert'
   if (status === 'projected_crossing' || status === 'incomplete_history') return 'dac-risk-panel--warn'
   return 'dac-risk-panel--ok'
 }
 
-function DacRiskPanel({ dacRisk }: { dacRisk: DacRisk }) {
-  const { language, t } = useI18n()
+function DacOfficialLink() {
+  const { t } = useI18n()
+  const [before = '', after = ''] = t('result.dacOfficialLink', {
+    link: '___',
+  }).split('___')
 
   return (
-    <section className={`dac-risk-panel ${dacPanelTone(dacRisk.status)}`} aria-live="polite">
+    <>
+      {before}
+      <a href={TARIFF_SNAPSHOT_META.dacUrl} target="_blank" rel="noreferrer">
+        {t('result.dacOfficialLinkLabel')}
+      </a>
+      {after}
+    </>
+  )
+}
+
+function DacRiskPanel({ dacRisk, expertMode }: { dacRisk: DacRisk; expertMode: boolean }) {
+  const { language, t } = useI18n()
+  const minimized = shouldMinimizeDacRisk(dacRisk, expertMode)
+  const message = minimized
+    ? t('dac.minimizedMessage', {
+        pace:
+          dacRisk.currentMonthlyPaceKwh != null
+            ? formatKwh(dacRisk.currentMonthlyPaceKwh, language, 1)
+            : '—',
+        limit: dacRisk.limitKwhMonth,
+      })
+    : dacRisk.message
+  const [summary, ...explanation] = message.split('\n\n')
+
+  return (
+    <section
+      className={`dac-risk-panel ${dacPanelTone(dacRisk.status, minimized)}${
+        minimized ? ' dac-risk-panel--minimized' : ''
+      }`}
+      aria-live="polite"
+    >
       <h3>{t('result.dacTitle')}</h3>
-      <p className="dac-risk-summary">{dacRisk.message}</p>
+      <p className="dac-risk-summary">{summary}</p>
+      {explanation.map((paragraph) => (
+        <p key={paragraph} className="dac-risk-explain">
+          {paragraph}
+        </p>
+      ))}
+      {minimized && <p className="dac-risk-hint">{t('dac.minimizedHint')}</p>}
 
       {dacRisk.status !== 'already_dac' && (
         <div className="dac-risk-stats">
@@ -29,15 +71,17 @@ function DacRiskPanel({ dacRisk }: { dacRisk: DacRisk }) {
             <span>{t('result.dacLimit')}</span>
             <strong>{t('result.dacLimitValue', { limit: dacRisk.limitKwhMonth })}</strong>
           </div>
-          <div>
-            <span>{t('result.dacHistoryCaptured')}</span>
-            <strong>
-              {t('result.dacHistoryValue', {
-                provided: dacRisk.providedHistorySlots,
-                required: dacRisk.requiredHistorySlots,
-              })}
-            </strong>
-          </div>
+          {!minimized && (
+            <div>
+              <span>{t('result.dacHistoryCaptured')}</span>
+              <strong>
+                {t('result.dacHistoryValue', {
+                  provided: dacRisk.providedHistorySlots,
+                  required: dacRisk.requiredHistorySlots,
+                })}
+              </strong>
+            </div>
+          )}
           {dacRisk.averageMonthlyKwh != null && (
             <div>
               <span>{t('result.dacAvg12')}</span>
@@ -71,33 +115,29 @@ function DacRiskPanel({ dacRisk }: { dacRisk: DacRisk }) {
         </div>
       )}
 
-      <ul className="dac-risk-details">
-        {dacRisk.detailParagraphs.map((item) => (
-          <li key={item}>{item}</li>
-        ))}
-        <li>
-          {(() => {
-            const [before = '', after = ''] = t('result.dacOfficialLink', {
-              link: '___',
-            }).split('___')
-            return (
-              <>
-                {before}
-                <a href={TARIFF_SNAPSHOT_META.dacUrl} target="_blank" rel="noreferrer">
-                  {t('result.dacOfficialLinkLabel')}
-                </a>
-                {after}
-              </>
-            )
-          })()}
-        </li>
-      </ul>
+      {minimized ? (
+        <p className="dac-risk-more">
+          <DacOfficialLink />
+        </p>
+      ) : (
+        <ul className="dac-risk-details">
+          {dacRisk.detailParagraphs.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+          {!expertMode && dacRisk.status === 'incomplete_history' && (
+            <li>{t('dac.incompleteEnableExpert')}</li>
+          )}
+          <li>
+            <DacOfficialLink />
+          </li>
+        </ul>
+      )}
     </section>
   )
 }
 
 export const EstimateResult = forwardRef<HTMLElement, Props>(function EstimateResult(
-  { estimate },
+  { estimate, expertMode },
   ref,
 ) {
   const { language, t } = useI18n()
@@ -225,7 +265,7 @@ export const EstimateResult = forwardRef<HTMLElement, Props>(function EstimateRe
         </>
       )}
 
-      <DacRiskPanel dacRisk={dacRisk} />
+      <DacRiskPanel dacRisk={dacRisk} expertMode={expertMode} />
 
       <footer className="sources">
         <h3>{t('result.sources')}</h3>

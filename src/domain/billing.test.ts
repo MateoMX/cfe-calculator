@@ -12,6 +12,7 @@ import {
   scaleDailyUsageKwh,
   scaleMonthlyAllowanceKwh,
   scalePeriodAllowanceKwh,
+  shouldMinimizeDacRisk,
   splitPeriodKwhBySeasonDays,
 } from './billing'
 import { createEmptyInput, estimateBill, resizeHistoryForCycle } from './estimate'
@@ -648,6 +649,41 @@ describe('DAC history averaging', () => {
     expect(estimate!.dacRisk.providedHistorySlots).toBe(2)
     expect(estimate!.dacRisk.requiredHistorySlots).toBe(6)
     expect(estimate!.dacRisk.message).toMatch(/Faltan 4/i)
+    expect(estimate!.dacRisk.message).toMatch(/historial/i)
+    expect(estimate!.dacRisk.message).toMatch(/12 meses/i)
+  })
+
+  it('minimizes DAC risk only without expert mode, history, or a monthly pace above the limit', () => {
+    const incompleteUnderLimit = {
+      applicable: true,
+      status: 'incomplete_history' as const,
+      limitKwhMonth: 400,
+      requiredHistorySlots: 6,
+      providedHistorySlots: 0,
+      averageMonthlyKwh: null,
+      currentMonthlyPaceKwh: 375,
+      projectedNextAverageMonthlyKwh: null,
+      currentPaceAboveLimit: false,
+      aboveLimit: null,
+      projectedAboveLimit: null,
+      message: '',
+      detailParagraphs: [],
+    }
+
+    expect(shouldMinimizeDacRisk(incompleteUnderLimit, false)).toBe(true)
+    expect(shouldMinimizeDacRisk(incompleteUnderLimit, true)).toBe(false)
+    expect(
+      shouldMinimizeDacRisk(
+        { ...incompleteUnderLimit, currentPaceAboveLimit: true, currentMonthlyPaceKwh: 450 },
+        false,
+      ),
+    ).toBe(false)
+    expect(shouldMinimizeDacRisk({ ...incompleteUnderLimit, providedHistorySlots: 2 }, false)).toBe(
+      false,
+    )
+    expect(shouldMinimizeDacRisk({ ...incompleteUnderLimit, status: 'below_limit' }, false)).toBe(
+      false,
+    )
   })
 
   it('clears history when switching billing cycle', () => {

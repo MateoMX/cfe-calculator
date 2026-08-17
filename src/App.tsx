@@ -30,6 +30,7 @@ import {
 import {
   buildShareUrl,
   copyTextToClipboard,
+  inputHasExpertShareFields,
   parseCalculatorInputFromHash,
 } from './shareLink'
 import './App.css'
@@ -106,10 +107,12 @@ interface DesktopLayoutProps {
   input: CalculatorInput
   issues: ValidationIssue[]
   estimate: FullEstimate | null
+  expertMode: boolean
   resultRef: RefObject<HTMLElement | null>
   formInstanceKey: number
   onChange: (next: CalculatorInput) => void
   onSubmit: () => void
+  onExpertModeChange: (enabled: boolean) => void
   onCopyShareLink: () => Promise<boolean>
   onNavigate: (view: AppView) => void
 }
@@ -118,10 +121,12 @@ function DesktopLayout({
   input,
   issues,
   estimate,
+  expertMode,
   resultRef,
   formInstanceKey,
   onChange,
   onSubmit,
+  onExpertModeChange,
   onCopyShareLink,
   onNavigate,
 }: DesktopLayoutProps) {
@@ -167,12 +172,14 @@ function DesktopLayout({
           key={formInstanceKey}
           value={input}
           issues={issues}
+          expertMode={expertMode}
           onChange={onChange}
           onSubmit={onSubmit}
+          onExpertModeChange={onExpertModeChange}
           onCopyShareLink={onCopyShareLink}
         />
         {estimate ? (
-          <EstimateResult ref={resultRef} estimate={estimate} />
+          <EstimateResult ref={resultRef} estimate={estimate} expertMode={expertMode} />
         ) : (
           <aside className="card placeholder">
             <h2>{t('app.placeholderTitle')}</h2>
@@ -203,6 +210,7 @@ function AppContent() {
   const isMobile = useIsMobile()
   const [view, setView] = useState<AppView>(() => readAppViewFromLocation())
   const [input, setInput] = useState<CalculatorInput>(() => createInitialInput())
+  const [expertMode, setExpertMode] = useState(() => inputHasExpertShareFields(createInitialInput()))
   const [issues, setIssues] = useState<ValidationIssue[]>([])
   const [estimate, setEstimate] = useState<FullEstimate | null>(null)
   const [formInstanceKey, setFormInstanceKey] = useState(0)
@@ -221,6 +229,7 @@ function AppContent() {
       const shared = parseCalculatorInputFromHash(hash)
       if (!shared) return
       setInput(shared)
+      setExpertMode(inputHasExpertShareFields(shared))
       setIssues([])
       setEstimate(null)
       shouldRebuildOnLanguageChange.current = false
@@ -309,9 +318,11 @@ function AppContent() {
         input={input}
         issues={issues}
         estimate={estimate}
+        expertMode={expertMode}
         formInstanceKey={formInstanceKey}
         onChange={handleChange}
         onSubmit={handleSubmit}
+        onExpertModeChange={setExpertMode}
         onCopyShareLink={handleCopyShareLink}
         onNavigate={handleNavigate}
       />
@@ -323,10 +334,12 @@ function AppContent() {
       input={input}
       issues={issues}
       estimate={estimate}
+      expertMode={expertMode}
       resultRef={resultRef}
       formInstanceKey={formInstanceKey}
       onChange={handleChange}
       onSubmit={handleSubmit}
+      onExpertModeChange={setExpertMode}
       onCopyShareLink={handleCopyShareLink}
       onNavigate={handleNavigate}
     />

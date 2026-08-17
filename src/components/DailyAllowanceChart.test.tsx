@@ -131,6 +131,9 @@ describe('DailyAllowanceChart mixed period', () => {
     ].map((node) => node.textContent)
     expect(firstColumnLabels[0]).toMatch(/Excess/i)
     expect(firstColumnLabels.at(-1)).toMatch(/Basic/i)
+    expect(document.querySelectorAll('.allowance-usage-pie')).toHaveLength(0)
+    expect(document.querySelectorAll('.allowance-band-fill').length).toBeGreaterThanOrEqual(4)
+    expect(screen.getAllByText('100%').length).toBeGreaterThanOrEqual(4)
 
     const chart = screen.getByRole('img', { name: /Mixed period\. Summer/i })
     expect(chart.getAttribute('aria-label')).toMatch(/Summer \(/i)

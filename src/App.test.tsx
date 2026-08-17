@@ -171,7 +171,8 @@ describe('App', () => {
     expect(screen.getByText(/Usando 3\.33 de 3\.33/i)).toBeInTheDocument()
     expect(screen.getByText(/Usando 4\.17 de 4\.17/i)).toBeInTheDocument()
     expect(screen.getAllByText('100%').length).toBeGreaterThanOrEqual(2)
-    expect(document.querySelectorAll('.allowance-usage-pie').length).toBeGreaterThanOrEqual(2)
+    expect(document.querySelectorAll('.allowance-usage-pie')).toHaveLength(0)
+    expect(document.querySelectorAll('.allowance-band-fill').length).toBeGreaterThanOrEqual(2)
     expect(screen.queryByText(/a este precio/i)).not.toBeInTheDocument()
     expect(screen.getAllByText(/\$1\.010 \/ kWh/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/\$1\.171 \/ kWh/i).length).toBeGreaterThan(0)
@@ -411,13 +412,88 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: /^Riesgo DAC$/i })).toBeInTheDocument()
     expect(screen.getByText(/últimos 6 consumos bimestrales/i)).toBeInTheDocument()
-    expect(screen.getByText(/Faltan 6 por capturar/i)).toBeInTheDocument()
+    expect(screen.getByText(/faltan 6/i)).toBeInTheDocument()
     expect(
-      screen.getByText(/sin esos consumos previos no podemos estimar tu promedio real/i),
+      screen.getByText(/ese promedio se va actualizando con cada recibo/i),
     ).toBeInTheDocument()
-    expect(screen.getByText(/no tu promedio móvil DAC/i)).toBeInTheDocument()
+    expect(screen.getByText(/por debajo del límite mensual/i)).toBeInTheDocument()
+    expect(screen.getByText(/Historial capturado/i)).toBeInTheDocument()
     expect(screen.getAllByText(/Umbral DAC/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/400 kWh\/mes/i).length).toBeGreaterThan(0)
+    expect(document.querySelector('.dac-risk-panel--minimized')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/Activa el modo experto en el formulario para capturar/i),
+    ).not.toBeInTheDocument()
+  })
+
+  it('minimizes DAC risk when expert mode is off, history is empty, and usage is under the monthly limit', async () => {
+    const user = userEvent.setup()
+    render(<App initialLanguage="es" />)
+
+    await user.selectOptions(
+      screen.getByLabelText(/Mes en que comienza el verano en tu localidad/i),
+      '5',
+    )
+    const previousReading = screen.getByLabelText(/Lectura anterior \(kWh del medidor al corte previo\)/i)
+    const currentReading = screen.getByLabelText(/Lectura actual \(kWh del medidor hoy\)/i)
+    await user.clear(previousReading)
+    await user.type(previousReading, '1000')
+    await user.clear(currentReading)
+    await user.type(currentReading, '1200')
+    await user.clear(screen.getByLabelText(/Fecha de corte del recibo anterior/i))
+    await user.type(screen.getByLabelText(/Fecha de corte del recibo anterior/i), '2026-06-30')
+    await user.clear(screen.getByLabelText(/Fecha de la lectura actual/i))
+    await user.type(screen.getByLabelText(/Fecha de la lectura actual/i), '2026-07-16')
+
+    await user.click(screen.getByRole('button', { name: /Calcular estimación/i }))
+
+    expect(await screen.findByRole('heading', { name: /^Riesgo DAC$/i })).toBeInTheDocument()
+    expect(document.querySelector('.dac-risk-panel--minimized')).toBeInTheDocument()
+    expect(document.querySelector('.dac-risk-panel--ok')).toBeInTheDocument()
+    expect(screen.getByText(/DAC es un poco complicado/i)).toBeInTheDocument()
+    expect(screen.getByText(/No activaste el modo experto/i)).toBeInTheDocument()
+    expect(screen.getByText(/es poco probable que estés en riesgo de DAC ahora/i)).toBeInTheDocument()
+    expect(screen.getByText(/activa el modo experto y anota el consumo/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Historial capturado/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/faltan 6/i)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('switch', { name: /Modo experto/i }))
+    expect(document.querySelector('.dac-risk-panel--minimized')).not.toBeInTheDocument()
+    expect(screen.getByText(/hace falta tu historial/i)).toBeInTheDocument()
+    expect(screen.getByText(/Historial capturado/i)).toBeInTheDocument()
+  })
+
+  it('expands DAC risk when current usage is in the monthly DAC window even without expert mode', async () => {
+    const user = userEvent.setup()
+    render(<App initialLanguage="es" />)
+
+    await user.selectOptions(
+      screen.getByLabelText(/Mes en que comienza el verano en tu localidad/i),
+      '5',
+    )
+    const previousReading = screen.getByLabelText(/Lectura anterior \(kWh del medidor al corte previo\)/i)
+    const currentReading = screen.getByLabelText(/Lectura actual \(kWh del medidor hoy\)/i)
+    await user.clear(previousReading)
+    await user.type(previousReading, '1000')
+    await user.clear(currentReading)
+    await user.type(currentReading, '1240')
+    await user.clear(screen.getByLabelText(/Fecha de corte del recibo anterior/i))
+    await user.type(screen.getByLabelText(/Fecha de corte del recibo anterior/i), '2026-06-30')
+    await user.clear(screen.getByLabelText(/Fecha de la lectura actual/i))
+    await user.type(screen.getByLabelText(/Fecha de la lectura actual/i), '2026-07-16')
+
+    await user.click(screen.getByRole('button', { name: /Calcular estimación/i }))
+
+    expect(await screen.findByRole('heading', { name: /^Riesgo DAC$/i })).toBeInTheDocument()
+    expect(document.querySelector('.dac-risk-panel--minimized')).not.toBeInTheDocument()
+    expect(document.querySelector('.dac-risk-panel--warn')).toBeInTheDocument()
+    expect(screen.getByText(/ya está en el rango del límite DAC/i)).toBeInTheDocument()
+    expect(screen.getByText(/Eso no significa que ya estés en DAC/i)).toBeInTheDocument()
+    expect(screen.getByText(/esa ventana se mueve con cada recibo/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/Activa el modo experto en el formulario para capturar/i),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/Historial capturado/i)).toBeInTheDocument()
   })
 
   it('switches to 12 monthly history slots and estimates a complete 12-month average', async () => {

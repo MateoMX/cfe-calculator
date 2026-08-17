@@ -18,7 +18,6 @@ import type {
   ValidationIssue,
 } from '../domain/types'
 import { formatMonthLabel, summerStartOptions, tariffOptionLabel, useI18n } from '../i18n'
-import { inputHasExpertShareFields } from '../shareLink'
 import {
   BillExampleDialog,
   BillExampleInfoButton,
@@ -29,8 +28,10 @@ import { InfoPopover } from './InfoPopover'
 interface Props {
   value: CalculatorInput
   issues: ValidationIssue[]
+  expertMode: boolean
   onChange: (next: CalculatorInput) => void
   onSubmit: () => void
+  onExpertModeChange: (enabled: boolean) => void
   onCopyShareLink: () => Promise<boolean>
   formId?: string
   showInlineSubmit?: boolean
@@ -45,15 +46,16 @@ function fieldError(issues: ValidationIssue[], field: keyof CalculatorInput): st
 export function CalculatorForm({
   value,
   issues,
+  expertMode,
   onChange,
   onSubmit,
+  onExpertModeChange,
   onCopyShareLink,
   formId,
   showInlineSubmit = true,
 }: Props) {
   const { language, t } = useI18n()
   const [activeExample, setActiveExample] = useState<ActiveBillExample | null>(null)
-  const [expertMode, setExpertMode] = useState(() => inputHasExpertShareFields(value))
   const [shareCopyStatus, setShareCopyStatus] = useState<ShareCopyStatus>('idle')
   const shareStatusResetRef = useRef<number | null>(null)
   const fieldIds = useId()
@@ -468,7 +470,7 @@ export function CalculatorForm({
               aria-checked={expertMode}
               aria-controls={expertPanelId}
               aria-label={t('form.expertMode')}
-              onClick={() => setExpertMode((current) => !current)}
+              onClick={() => onExpertModeChange(!expertMode)}
             >
               <span className="expert-switch-track" aria-hidden="true">
                 <span className="expert-switch-thumb" />

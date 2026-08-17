@@ -320,7 +320,7 @@ const esMessages = {
   'allowance.legendExcessOff': 'sin uso',
   'allowance.usedOf': 'Usando {used} de {total}',
   'allowance.usedAmount': 'Usando {used}',
-  'allowance.usedLabel': 'Usando:',
+  'allowance.fillPercentTitle': '{percent}% de este cupo',
   'allowance.perDay': 'día',
   'allowance.perMonth': 'mes',
   'allowance.perBimonth': 'bimestre',
@@ -458,23 +458,29 @@ const esMessages = {
   'dac.alreadyDetail2':
     'Para salir de DAC debes mantener un Consumo Mensual Promedio inferior al límite de tu localidad y gestionar el cambio ante CFE.',
   'dac.historyRuleMensual':
-    'Para el promedio oficial se suman los kWh de tus últimos 12 recibos mensuales y se dividen entre 12.',
+    'CFE suma los kWh de tus últimos 12 recibos mensuales y los divide entre 12. Ese promedio se compara con el límite.',
   'dac.historyRuleBimestral':
-    'Aunque tu facturación sea bimestral, el límite DAC se expresa en kWh/mes. Se suman los kWh de tus últimos 6 recibos (cada uno cubre ~2 meses) y se dividen entre 12.',
+    'Aunque tu recibo sea cada dos meses, el límite DAC se expresa en kWh por mes. Se suman los kWh de tus últimos 6 recibos y se dividen entre 12.',
   'dac.cycleMensuales': 'mensuales',
   'dac.cycleBimestrales': 'bimestrales',
-  'dac.incompletePaceAbove':
-    'Si mantuvieras durante un mes el ritmo observado en este periodo, usarías aproximadamente {pace} kWh/mes, por encima del límite de {limit} kWh/mes. Esta es una proyección de tu uso actual, no tu promedio móvil DAC.',
-  'dac.incompletePaceOk':
-    'Si mantuvieras durante un mes el ritmo observado en este periodo, usarías aproximadamente {pace} kWh/mes (límite {limit} kWh/mes). Esta es una proyección de tu uso actual, no tu promedio móvil DAC.',
+  'dac.minimizedMessage':
+    'DAC es un poco complicado: CFE no te pasa a esa tarifa más cara por un solo recibo, sino por tu promedio de consumo de los últimos 12 meses. No activaste el modo experto ni capturaste ese historial, así que no revisamos tus meses anteriores.\n\nAun así, con el uso de este periodo (~{pace} kWh/mes) estás por debajo del límite mensual de {limit} kWh/mes, así que es poco probable que estés en riesgo de DAC ahora.',
+  'dac.minimizedHint':
+    'Si quieres una lectura más precisa, activa el modo experto y anota el consumo de tus recibos anteriores.',
   'dac.incompleteMessage':
-    'Límite DAC de {tariff}: {limit} kWh/mes. {paceNote} Para estimar tu promedio móvil de 12 meses y el riesgo real de DAC necesitamos tus últimos {required} consumos {cycleLabel}. Faltan {missing} por capturar.',
+    'Para estimar el riesgo real de DAC hace falta tu historial: CFE usa el promedio de tus últimos 12 meses, no este periodo solo. El límite de {tariff} es {limit} kWh/mes. Captura tus últimos {required} consumos {cycleLabel} (faltan {missing}).\n\nEse promedio se va actualizando con cada recibo. Varios meses altos pueden acercarte al límite aunque este ciclo se vea tranquilo, y un mes alto aislado puede no bastar para entrar a DAC. Tu ritmo actual es de unos {pace} kWh/mes, por debajo del límite mensual, pero los meses anteriores podrían contar otra historia.',
+  'dac.incompleteMessageAtRisk':
+    'Tu uso de este periodo (~{pace} kWh/mes) ya está en el rango del límite DAC de {limit} kWh/mes. Eso no significa que ya estés en DAC.\n\nCFE promedia lo que usaste en los últimos 12 meses, y esa ventana se mueve con cada recibo. Si tus meses anteriores fueron más bajos, el promedio podría seguir bajo el límite; si también fueron altos, el riesgo es mayor. Por eso importa tanto capturar tus últimos {required} consumos {cycleLabel} (faltan {missing}).',
+  'dac.incompleteMessageNoPace':
+    'Para estimar el riesgo real de DAC hace falta tu historial: CFE usa el promedio de tus últimos 12 meses, no este periodo solo. El límite de {tariff} es {limit} kWh/mes. Captura tus últimos {required} consumos {cycleLabel} (faltan {missing}).\n\nEse promedio se va actualizando con cada recibo. Varios meses altos pueden acercarte al límite aunque este ciclo se vea tranquilo, y un mes alto aislado puede no bastar para entrar a DAC.',
+  'dac.incompleteEnableExpert':
+    'Activa el modo experto en el formulario para capturar el consumo de esos recibos anteriores.',
   'dac.incompleteDetailMain':
-    'CFE determina el riesgo DAC con el promedio móvil de 12 meses, no con la proyección de un solo periodo. Sin esos consumos previos no podemos estimar tu promedio real ni confirmar si estás en riesgo de alto consumo.',
+    'Un mes alto no te mete automáticamente a DAC, ni un mes bajo te saca de inmediato. Lo que cuenta es la ventana de 12 meses, que se recorre hacia adelante con cada ciclo nuevo.',
   'dac.incompleteDetailEmpty':
-    'Captura los {required} consumos {cycleLabel} en el modo experto del formulario (el “Consumo (kWh)” de cada recibo en tu historial CFE).',
+    'Anota el “Consumo (kWh)” o “Total periodo” de cada recibo en tu historial CFE, del más reciente al más antiguo ({required} consumos {cycleLabel}).',
   'dac.incompleteDetailPartial':
-    'Ya capturaste {provided} de {required}. Completa los {missing} faltantes para calcular tu promedio de 12 meses y una proyección del siguiente ciclo.',
+    'Ya capturaste {provided} de {required}. Completa los {missing} que faltan para calcular tu promedio de 12 meses y una proyección del siguiente ciclo.',
   'dac.avgDetail':
     'Tu promedio de los últimos 12 meses es {average} kWh/mes (límite {limit} kWh/mes).',
   'dac.paceDetail':
@@ -815,7 +821,7 @@ const enMessages: Record<MessageKey, string> = {
   'allowance.legendExcessOff': 'unused',
   'allowance.usedOf': 'Using {used} of {total}',
   'allowance.usedAmount': 'Using {used}',
-  'allowance.usedLabel': 'Using:',
+  'allowance.fillPercentTitle': '{percent}% of this allowance',
   'allowance.perDay': 'day',
   'allowance.perMonth': 'month',
   'allowance.perBimonth': 'bimonth',
@@ -949,21 +955,27 @@ const enMessages: Record<MessageKey, string> = {
   'dac.alreadyDetail2':
     'To leave DAC you must keep Average Monthly Consumption below your locality’s limit and request the change from CFE.',
   'dac.historyRuleMensual':
-    'For the official average, the kWh from your last 12 monthly bills are summed and divided by 12.',
+    'CFE adds the kWh from your last 12 monthly bills and divides by 12. That average is compared with the limit.',
   'dac.historyRuleBimestral':
-    'Even with bimonthly billing, the DAC limit is expressed in kWh/month. The kWh from your last 6 bills (each covering ~2 months) are summed and divided by 12.',
+    'Even if your bill is every two months, the DAC limit is expressed in kWh per month. The kWh from your last 6 bills are summed and divided by 12.',
   'dac.cycleMensuales': 'monthly',
   'dac.cycleBimestrales': 'bimonthly',
-  'dac.incompletePaceAbove':
-    'If you kept this period’s observed pace for a month, you would use about {pace} kWh/month, above the {limit} kWh/month limit. This is a projection of your current use, not your DAC rolling average.',
-  'dac.incompletePaceOk':
-    'If you kept this period’s observed pace for a month, you would use about {pace} kWh/month (limit {limit} kWh/month). This is a projection of your current use, not your DAC rolling average.',
+  'dac.minimizedMessage':
+    'DAC is a bit complicated: CFE does not move you onto that more expensive tariff because of a single bill, but because of your average use over the last 12 months. You have not turned on expert mode or entered that history, so we have not reviewed your earlier months.\n\nStill, at this period’s pace (~{pace} kWh/month) you are under the {limit} kWh/month monthly limit, so you are probably not at DAC risk right now.',
+  'dac.minimizedHint':
+    'If you want a more precise reading, turn on expert mode and enter the consumption from your previous bills.',
   'dac.incompleteMessage':
-    'DAC limit for {tariff}: {limit} kWh/month. {paceNote} To estimate your 12-month rolling average and real DAC risk we need your last {required} {cycleLabel} consumptions. {missing} still missing.',
+    'To estimate real DAC risk we need your usage history: CFE uses your average over the last 12 months, not this period alone. The limit for {tariff} is {limit} kWh/month. Enter your last {required} {cycleLabel} consumptions ({missing} still missing).\n\nThat average updates with every bill. Several high months can move you toward the limit even if this cycle looks calm, and one high month on its own may not be enough to enter DAC. Your current pace is about {pace} kWh/month, below the monthly limit, but earlier months could tell a different story.',
+  'dac.incompleteMessageAtRisk':
+    'Your use this period (~{pace} kWh/month) is already in the range of the {limit} kWh/month DAC limit. That does not mean you are already on DAC.\n\nCFE averages what you used over the last 12 months, and that window moves with every bill. If earlier months were lower, the average could still be under the limit; if they were also high, the risk is greater. That is why it matters to enter your last {required} {cycleLabel} consumptions ({missing} still missing).',
+  'dac.incompleteMessageNoPace':
+    'To estimate real DAC risk we need your usage history: CFE uses your average over the last 12 months, not this period alone. The limit for {tariff} is {limit} kWh/month. Enter your last {required} {cycleLabel} consumptions ({missing} still missing).\n\nThat average updates with every bill. Several high months can move you toward the limit even if this cycle looks calm, and one high month on its own may not be enough to enter DAC.',
+  'dac.incompleteEnableExpert':
+    'Turn on expert mode in the form to enter the consumption from those previous bills.',
   'dac.incompleteDetailMain':
-    'CFE determines DAC risk with the 12-month rolling average, not a single-period projection. Without those prior consumptions we cannot estimate your real average or confirm high-consumption risk.',
+    'One high month does not automatically put you on DAC, and one low month does not take you off it right away. What counts is the 12-month window, which rolls forward with each new cycle.',
   'dac.incompleteDetailEmpty':
-    'Enter the {required} {cycleLabel} consumptions in the form’s expert mode (the “Consumo (kWh)” from each bill in your CFE history).',
+    'Enter the “Consumo (kWh)” or “Total periodo” from each bill in your CFE history, newest to oldest ({required} {cycleLabel} consumptions).',
   'dac.incompleteDetailPartial':
     'You have entered {provided} of {required}. Complete the remaining {missing} to calculate your 12-month average and a projection for the next cycle.',
   'dac.avgDetail':

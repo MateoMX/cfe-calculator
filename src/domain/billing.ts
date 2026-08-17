@@ -681,18 +681,20 @@ export function assessDacRisk(
   const average = averageMonthlyFromHistory(input.historicalPeriodKwh, input.billingCycle)
   if (average == null) {
     const missing = Math.max(0, required - provided)
-    const paceNote =
+    const messageParams = {
+      tariff: tariff.name,
+      limit,
+      required,
+      cycleLabel,
+      missing,
+      pace: currentMonthlyPaceKwh != null ? formatMonth(currentMonthlyPaceKwh) : '',
+    }
+    const message =
       currentPaceAboveLimit === true && currentMonthlyPaceKwh != null
-        ? translate(language, 'dac.incompletePaceAbove', {
-            pace: formatMonth(currentMonthlyPaceKwh),
-            limit,
-          })
+        ? translate(language, 'dac.incompleteMessageAtRisk', messageParams)
         : currentMonthlyPaceKwh != null
-          ? translate(language, 'dac.incompletePaceOk', {
-              pace: formatMonth(currentMonthlyPaceKwh),
-              limit,
-            })
-          : ''
+          ? translate(language, 'dac.incompleteMessage', messageParams)
+          : translate(language, 'dac.incompleteMessageNoPace', messageParams)
 
     return {
       applicable: true,
@@ -706,17 +708,10 @@ export function assessDacRisk(
       currentPaceAboveLimit,
       aboveLimit: null,
       projectedAboveLimit: null,
-      message: translate(language, 'dac.incompleteMessage', {
-        tariff: tariff.name,
-        limit,
-        paceNote,
-        required,
-        cycleLabel,
-        missing,
-      }),
+      message,
       detailParagraphs: [
-        historyRule,
         translate(language, 'dac.incompleteDetailMain'),
+        historyRule,
         provided === 0
           ? translate(language, 'dac.incompleteDetailEmpty', { required, cycleLabel })
           : translate(language, 'dac.incompleteDetailPartial', {
@@ -807,6 +802,19 @@ export function assessDacRisk(
     message,
     detailParagraphs,
   }
+}
+
+/**
+ * Compact DAC panel: expert mode is off, no history was entered, and the
+ * current monthly pace is still under the official DAC limit.
+ */
+export function shouldMinimizeDacRisk(dacRisk: DacRisk, expertMode: boolean): boolean {
+  return (
+    dacRisk.status === 'incomplete_history' &&
+    !expertMode &&
+    dacRisk.providedHistorySlots === 0 &&
+    dacRisk.currentPaceAboveLimit === false
+  )
 }
 
 /** Pure allocator used by tests for known block outcomes. */

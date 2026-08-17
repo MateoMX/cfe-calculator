@@ -296,6 +296,62 @@ function useViewportHeight(): number {
   return viewportHeight
 }
 
+function usedPercent(segment: ZoneSegment): number {
+  const total = segment.usedKwh + segment.unusedKwh
+  if (total <= 0) return 0
+  return Math.min(100, Math.round((segment.usedKwh / total) * 100))
+}
+
+function BandUsageCopy({
+  segment,
+  formatBand,
+  unit,
+  t,
+}: {
+  segment: ZoneSegment
+  formatBand: (value: number) => string
+  unit: string
+  t: (key: Parameters<ReturnType<typeof useI18n>['t']>[0], params?: Record<string, string | number>) => string
+}) {
+  const total = segment.usedKwh + segment.unusedKwh
+  if (segment.isExcess) {
+    if (segment.usedKwh <= 0) {
+      return (
+        <span className="allowance-band-usage allowance-band-usage--off">
+          {t('allowance.legendExcessOff')}
+        </span>
+      )
+    }
+    return (
+      <span className="allowance-band-usage">
+        <span className="allowance-band-usage-copy">
+          {t('allowance.usedAmount', { used: formatBand(segment.usedKwh) })}
+          <small>kWh / {unit}</small>
+        </span>
+      </span>
+    )
+  }
+
+  const percent = usedPercent(segment)
+  return (
+    <span className="allowance-band-usage">
+      <span className="allowance-band-usage-copy">
+        {t('allowance.usedOf', {
+          used: formatBand(segment.usedKwh),
+          total: formatBand(total),
+        })}
+        <small>kWh / {unit}</small>
+      </span>
+      <span
+        className="allowance-band-fill"
+        title={t('allowance.fillPercentTitle', { percent })}
+      >
+        {percent}%
+      </span>
+    </span>
+  )
+}
+
 function ProfileChart({
   profile,
   averageDailyKwh,
@@ -469,55 +525,27 @@ function ProfileChart({
         </div>
 
         <div className="allowance-vbar-legend">
-          {segments.map((segment, index) => {
-            const total = segment.usedKwh + segment.unusedKwh
-            const usedPct = total > 0 ? Math.min(100, (segment.usedKwh / total) * 100) : 0
-            const roundedUsedPct = Math.round(usedPct)
-            return (
-              <div
-                key={segment.key}
-                className={`allowance-vbar-legend-item ${segment.tone}`}
-                style={{ flex: `${displayFractions[index]} 1 0` }}
-              >
-                <span className="allowance-bar-identity">
-                  <span className="allowance-bar-label">{segment.label}</span>
-                  {segment.ratePerKwh != null && (
-                    <span className="allowance-bar-rate">{money(segment.ratePerKwh)} / kWh</span>
-                  )}
-                </span>
-
-                <span className="allowance-bar-value">
-                  {segment.isExcess
-                    ? t('allowance.usedAmount', { used: formatBand(segment.usedKwh) })
-                    : t('allowance.usedOf', {
-                        used: formatBand(segment.usedKwh),
-                        total: formatBand(total),
-                      })}
-                  <small>kWh / {unit}</small>
-                </span>
-
-                {segment.isExcess ? (
-                  segment.usedKwh > 0 ? null : (
-                    <span className="allowance-bar-usage allowance-bar-usage--excess">
-                      {t('allowance.legendExcessOff')}
-                    </span>
-                  )
-                ) : (
-                  <span className="allowance-bar-usage">
-                    <span>{t('allowance.usedLabel')}</span>
-                    <span className="allowance-bar-usage-value">
-                      <span
-                        className="allowance-usage-pie"
-                        style={{ '--usage-percent': `${usedPct}%` } as CSSProperties}
-                        aria-hidden="true"
-                      />
-                      <strong>{roundedUsedPct}%</strong>
-                    </span>
-                  </span>
+          {segments.map((segment, index) => (
+            <div
+              key={segment.key}
+              className={`allowance-vbar-legend-item ${segment.tone}`}
+              style={{ flex: `${displayFractions[index]} 1 0` }}
+            >
+              <span className="allowance-bar-identity">
+                <span className="allowance-bar-label">{segment.label}</span>
+                {segment.ratePerKwh != null && (
+                  <span className="allowance-bar-rate">{money(segment.ratePerKwh)} / kWh</span>
                 )}
-              </div>
-            )
-          })}
+              </span>
+
+              <BandUsageCopy
+                segment={segment}
+                formatBand={formatBand}
+                unit={unit}
+                t={t}
+              />
+            </div>
+          ))}
         </div>
 
         {dacMarkerPct != null && dacMarkerKwh != null && (
@@ -781,12 +809,10 @@ function SeasonColumn({
           {[...segments].toReversed().map((segment) => {
             const total = segment.usedKwh + segment.unusedKwh
             if (total <= 0) return null
-            const usedPct = Math.min(100, (segment.usedKwh / total) * 100)
-            const roundedUsedPct = Math.round(usedPct)
             return (
               <li key={segment.key} className={`allowance-mixed-detail ${segment.tone}`}>
                 <span className="allowance-mixed-detail-swatch" aria-hidden="true" />
-                <span className="allowance-mixed-detail-main">
+                <span className="allowance-mixed-detail-header">
                   <span className="allowance-mixed-detail-label">{segment.label}</span>
                   {segment.ratePerKwh != null && (
                     <span className="allowance-mixed-detail-rate">
@@ -794,33 +820,12 @@ function SeasonColumn({
                     </span>
                   )}
                 </span>
-                <span className="allowance-mixed-detail-value">
-                  {segment.isExcess
-                    ? t('allowance.usedAmount', { used: formatBand(segment.usedKwh) })
-                    : t('allowance.usedOf', {
-                        used: formatBand(segment.usedKwh),
-                        total: formatBand(total),
-                      })}
-                  <small>kWh / {unit}</small>
-                </span>
-                {segment.isExcess ? (
-                  segment.usedKwh > 0 ? (
-                    <span className="allowance-mixed-detail-pct" aria-hidden="true" />
-                  ) : (
-                    <span className="allowance-mixed-detail-pct allowance-mixed-detail-pct--off">
-                      {t('allowance.legendExcessOff')}
-                    </span>
-                  )
-                ) : (
-                  <span className="allowance-mixed-detail-pct">
-                    <span
-                      className="allowance-usage-pie"
-                      style={{ '--usage-percent': `${usedPct}%` } as CSSProperties}
-                      aria-hidden="true"
-                    />
-                    <strong>{roundedUsedPct}%</strong>
-                  </span>
-                )}
+                <BandUsageCopy
+                  segment={segment}
+                  formatBand={formatBand}
+                  unit={unit}
+                  t={t}
+                />
               </li>
             )
           })}
