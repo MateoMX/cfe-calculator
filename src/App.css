@@ -1043,6 +1043,8 @@
 }
 
 .allowance-chart--mixed {
+  --allowance-mixed-bar-width: 0.9rem;
+  --allowance-mixed-marker-gutter: 0.65rem;
   position: relative;
   display: block;
   height: auto;
@@ -1052,7 +1054,7 @@
 .allowance-mixed-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.25rem;
+  gap: 1.1rem;
   align-items: start;
   min-width: 0;
 }
@@ -1060,7 +1062,7 @@
 .allowance-mixed-column {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.55rem;
   min-width: 0;
 }
 
@@ -1084,21 +1086,36 @@
   line-height: 1.3;
 }
 
+.allowance-mixed-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem 0.75rem;
+  align-items: start;
+  min-width: 0;
+}
+
 .allowance-mixed-bar-stage {
   position: relative;
-  width: 3rem;
+  width: calc(var(--allowance-mixed-marker-gutter) + var(--allowance-mixed-bar-width));
   margin: 0;
+  flex: 0 0 auto;
 }
 
 .allowance-mixed-bar-stage .allowance-vbar-track {
   grid-column: auto;
-  width: 100%;
+  position: absolute;
+  left: var(--allowance-mixed-marker-gutter);
+  width: var(--allowance-mixed-bar-width);
   height: 100%;
 }
 
+.allowance-mixed-bar-stage .allowance-vbar-zones {
+  border-radius: 999px;
+}
+
 .allowance-marker--mixed {
-  left: -0.7rem;
-  width: calc(100% + 0.7rem);
+  left: calc(-1 * var(--allowance-mixed-marker-gutter));
+  width: calc(100% + var(--allowance-mixed-marker-gutter));
 }
 
 .allowance-marker--mixed .allowance-marker-triangle {
@@ -1106,30 +1123,31 @@
 }
 
 .allowance-marker--mixed .allowance-marker-line {
-  left: 0.7rem;
+  left: var(--allowance-mixed-marker-gutter);
   right: 0;
 }
 
 .allowance-mixed-details {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.5rem;
   margin: 0;
   padding: 0;
   list-style: none;
+  min-width: 0;
 }
 
 .allowance-mixed-detail {
   display: grid;
-  grid-template-columns: 0.75rem minmax(0, 1fr) auto;
+  grid-template-columns: 0.7rem minmax(0, 1fr) auto;
   grid-template-areas:
     'swatch main pct'
     'swatch value pct';
-  column-gap: 0.55rem;
-  row-gap: 0.2rem;
+  column-gap: 0.5rem;
+  row-gap: 0.15rem;
   align-items: center;
-  padding: 0.55rem 0.6rem;
+  padding: 0.48rem 0.55rem;
   border: 1px solid color-mix(in srgb, var(--border, #d5dde7) 80%, transparent);
-  border-radius: 0.6rem;
+  border-radius: 0.55rem;
   background: color-mix(in srgb, var(--surface, #fff) 92%, var(--zone-color) 8%);
 }
 
@@ -1201,11 +1219,15 @@
 @media (max-width: 720px) {
   .allowance-mixed-columns {
     grid-template-columns: 1fr;
-    gap: 1.25rem;
+    gap: 1.15rem;
   }
 
-  .allowance-mixed-bar-stage {
-    width: 3.25rem;
+  .allowance-chart--mixed {
+    --allowance-mixed-bar-width: 1rem;
+  }
+
+  .allowance-mixed-body {
+    gap: 0.65rem 0.8rem;
   }
 }
 

@@ -119,12 +119,41 @@ describe('DailyAllowanceChart mixed period', () => {
     expect(screen.getByRole('heading', { name: 'Standard' })).toBeInTheDocument()
     expect(document.querySelectorAll('.allowance-chart--mixed')).toHaveLength(1)
     expect(document.querySelectorAll('.allowance-mixed-column')).toHaveLength(2)
+    expect(document.querySelectorAll('.allowance-mixed-body')).toHaveLength(2)
+    expect(document.querySelectorAll('.allowance-mixed-bar-stage')).toHaveLength(2)
     expect(document.querySelectorAll('.allowance-mixed-details')).toHaveLength(2)
     expect(document.querySelectorAll('.allowance-mixed-detail').length).toBeGreaterThanOrEqual(4)
 
     const chart = screen.getByRole('img', { name: /Mixed period\. Summer/i })
     expect(chart.getAttribute('aria-label')).toMatch(/Summer \(/i)
     expect(chart.getAttribute('aria-label')).toMatch(/Standard \(/i)
+  })
+
+  it('plots summer and standard bars on the same monthly kWh scale', () => {
+    renderChart('bimestral', makeMixtoComparison(), 'en')
+
+    const columns = document.querySelectorAll('.allowance-mixed-column')
+    expect(columns).toHaveLength(2)
+    const summerBasic = columns[0]!.querySelector('.allowance-vbar-zone')
+    const standardBasic = columns[1]!.querySelector('.allowance-vbar-zone')
+    expect(summerBasic).not.toBeNull()
+    expect(standardBasic).not.toBeNull()
+
+    const flexGrow = (element: Element) => Number.parseFloat(String((element as HTMLElement).style.flex))
+    // 1B official monthly Basic: 125 summer vs 75 standard.
+    expect(flexGrow(summerBasic!) / flexGrow(standardBasic!)).toBeCloseTo(125 / 75, 5)
+
+    const dacMarkers = document.querySelectorAll('.allowance-marker--dac.allowance-marker--mixed')
+    expect(dacMarkers).toHaveLength(2)
+    expect((dacMarkers[0] as HTMLElement).style.bottom).toBe(
+      (dacMarkers[1] as HTMLElement).style.bottom,
+    )
+
+    const usageMarkers = document.querySelectorAll('.allowance-marker--avg.allowance-marker--mixed')
+    expect(usageMarkers).toHaveLength(2)
+    expect((usageMarkers[0] as HTMLElement).style.bottom).toBe(
+      (usageMarkers[1] as HTMLElement).style.bottom,
+    )
   })
 
   it('keeps the mixed split visible when the display scale changes', async () => {
